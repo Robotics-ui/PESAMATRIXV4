@@ -14,10 +14,51 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Eye, EyeOff, Webhook, Copy, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetAdminSettingsQueryKey } from "@workspace/api-client-react";
 import { useEffect } from "react";
+
+function WebhookUrlDisplay() {
+  const [copied, setCopied] = useState(false);
+  const webhookUrl = `${window.location.origin}/api/webhooks/copyfactory`;
+
+  const copy = () => {
+    void navigator.clipboard.writeText(webhookUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="flex items-center gap-2">
+        <Webhook className="h-4 w-4" /> CopyFactory Webhook URL
+      </Label>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 text-xs bg-muted px-3 py-2 rounded-md border border-input font-mono truncate text-muted-foreground">
+          {webhookUrl}
+        </code>
+        <button
+          type="button"
+          onClick={copy}
+          className="shrink-0 h-9 w-9 flex items-center justify-center rounded-md border border-input bg-background hover:bg-muted transition-colors"
+          title="Copy URL"
+        >
+          {copied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4 text-muted-foreground" />}
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Register this URL as a subscriber/strategy listener in your{" "}
+        <a href="https://app.metaapi.cloud" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+          MetaApi CopyFactory
+        </a>{" "}
+        dashboard. To secure it, set the <code className="bg-muted px-1 rounded">COPYFACTORY_WEBHOOK_SECRET</code> secret and append{" "}
+        <code className="bg-muted px-1 rounded">?secret=YOUR_SECRET</code> to the URL above.
+      </p>
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -240,6 +281,7 @@ export default function AdminPage() {
                     Leave blank to fall back to the <code className="bg-muted px-1 rounded">METAAPI_TOKEN</code> environment variable.
                   </p>
                 </div>
+                <WebhookUrlDisplay />
                 <div className="flex items-center gap-3">
                   <Button onClick={handleSaveSettings} className="bg-green-600 hover:bg-green-700" disabled={saveStatus === "saving"}>
                     {saveStatus === "saving" ? "Saving..." : "Save Settings"}
