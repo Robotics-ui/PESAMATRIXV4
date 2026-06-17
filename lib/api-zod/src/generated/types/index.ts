@@ -29,6 +29,8 @@ export * from './payment';
 export * from './paymentInitResponse';
 export * from './paymentInput';
 export * from './paymentStatus';
+export * from './paymentStatusResponse';
+export * from './paymentStatusResponseStatus';
 export * from './registerInput';
 export * from './slaveAccount';
 export * from './slaveAccountInput';

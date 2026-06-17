@@ -221,6 +221,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /payments/{checkoutRequestId}/status:
+    get:
+      operationId: getPaymentStatus
+      tags: [payments]
+      summary: Poll payment status by checkout request ID
+      parameters:
+        - in: path
+          name: checkoutRequestId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatusResponse"
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /payments/callback:
     post:
       operationId: mpesaCallback
@@ -767,6 +792,18 @@ components:
           type: string
         message:
           type: string
+        amount:
+          type: number
+
+    PaymentStatusResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        mpesaReceipt:
+          type: ["string", "null"]
         amount:
           type: number
 

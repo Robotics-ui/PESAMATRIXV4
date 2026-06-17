@@ -39,6 +39,7 @@ import type {
   Payment,
   PaymentInitResponse,
   PaymentInput,
+  PaymentStatusResponse,
   RegisterInput,
   SlaveAccount,
   SlaveAccountInput,
@@ -795,6 +796,83 @@ export const useInitiatePayment = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getInitiatePaymentMutationOptions(options));
     }
+
+export const getGetPaymentStatusUrl = (checkoutRequestId: string,) => {
+
+
+
+
+  return `/api/payments/${checkoutRequestId}/status`
+}
+
+/**
+ * @summary Poll payment status by checkout request ID
+ */
+export const getPaymentStatus = async (checkoutRequestId: string, options?: RequestInit): Promise<PaymentStatusResponse> => {
+
+  return customFetch<PaymentStatusResponse>(getGetPaymentStatusUrl(checkoutRequestId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentStatusQueryKey = (checkoutRequestId: string,) => {
+    return [
+    `/api/payments/${checkoutRequestId}/status`
+    ] as const;
+    }
+
+
+export const getGetPaymentStatusQueryOptions = <TData = Awaited<ReturnType<typeof getPaymentStatus>>, TError = ErrorType<ErrorResponse>>(checkoutRequestId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentStatusQueryKey(checkoutRequestId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentStatus>>> = ({ signal }) => getPaymentStatus(checkoutRequestId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(checkoutRequestId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getPaymentStatus>>>
+export type GetPaymentStatusQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Poll payment status by checkout request ID
+ */
+
+export function useGetPaymentStatus<TData = Awaited<ReturnType<typeof getPaymentStatus>>, TError = ErrorType<ErrorResponse>>(
+ checkoutRequestId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentStatusQueryOptions(checkoutRequestId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getMpesaCallbackUrl = () => {
 

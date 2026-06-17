@@ -110,6 +110,22 @@ export interface PaymentInitResponse {
   amount?: number;
 }
 
+export type PaymentStatusResponseStatus = typeof PaymentStatusResponseStatus[keyof typeof PaymentStatusResponseStatus];
+
+
+export const PaymentStatusResponseStatus = {
+  pending: 'pending',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
+export interface PaymentStatusResponse {
+  status: PaymentStatusResponseStatus;
+  /** @nullable */
+  mpesaReceipt?: string | null;
+  amount?: number;
+}
+
 export type MpesaCallbackInputBody = { [key: string]: unknown };
 
 export interface MpesaCallbackInput {

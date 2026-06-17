@@ -165,6 +165,20 @@ export const InitiatePaymentResponse = zod.object({
 
 
 /**
+ * @summary Poll payment status by checkout request ID
+ */
+export const GetPaymentStatusParams = zod.object({
+  "checkoutRequestId": zod.coerce.string()
+})
+
+export const GetPaymentStatusResponse = zod.object({
+  "status": zod.enum(['pending', 'completed', 'failed']),
+  "mpesaReceipt": zod.string().nullish(),
+  "amount": zod.number().optional()
+})
+
+
+/**
  * @summary M-Pesa callback endpoint (called by Safaricom)
  */
 export const MpesaCallbackBody = zod.object({

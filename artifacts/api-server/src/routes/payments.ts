@@ -49,8 +49,14 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
   const dailyFee = await getDailyFee();
   const amount = days * dailyFee;
 
-  // Format phone: strip leading 0 or +254, normalize to 254XXXXXXXXX
-  const normalizedPhone = phone.replace(/^\+/, "").replace(/^0/, "254");
+  // Normalize phone to 254XXXXXXXXX format
+  // Handles: +254XXXXXXXXX, 0XXXXXXXXX, 7XXXXXXXXX, 254XXXXXXXXX
+  let normalizedPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
+  if (normalizedPhone.startsWith("0")) {
+    normalizedPhone = "254" + normalizedPhone.slice(1);
+  } else if (/^[71]/.test(normalizedPhone) && normalizedPhone.length === 9) {
+    normalizedPhone = "254" + normalizedPhone;
+  }
 
   // Check if MPESA credentials are configured
   const consumerKey = process.env.MPESA_CONSUMER_KEY;
@@ -155,6 +161,26 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
     req.log.error({ err }, "STK Push error");
     res.status(500).json({ error: "Payment initiation failed" });
   }
+});
+
+router.get("/payments/:checkoutRequestId/status", authenticate, async (req, res): Promise<void> => {
+  const { checkoutRequestId } = req.params;
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.checkoutRequestId, checkoutRequestId));
+
+  if (!payment || payment.userId !== req.userId!) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+
+  res.json({
+    status: payment.status,
+    mpesaReceipt: payment.mpesaReceipt ?? null,
+    amount: parseFloat(payment.amount as string),
+  });
 });
 
 router.post("/payments/callback", async (req, res): Promise<void> => {
