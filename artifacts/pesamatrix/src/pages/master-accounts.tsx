@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListMasterAccounts,
@@ -16,6 +16,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Server, Plus, Trash2, RefreshCw, AlertCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+
+const SETTLED_STATUSES = new Set(["connected", "disconnected"]);
+const POLL_INTERVAL_MS = 10_000;
+
+function isPolling(status?: string | null): boolean {
+  return !SETTLED_STATUSES.has(status ?? "");
+}
 
 function StatusBadge({ status }: { status?: string | null }) {
   if (status === "connected") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Connected</Badge>;
@@ -60,6 +67,40 @@ export default function MasterAccountsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState({ mt5Login: "", investorPassword: "", server: "", broker: "" });
   const [error, setError] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const pendingAccounts = (accounts ?? []).filter(
+    (acc) => acc.metaapiAccountId && isPolling(acc.status)
+  );
+  const hasPolling = pendingAccounts.length > 0;
+
+  useEffect(() => {
+    if (!hasPolling) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    const tick = async () => {
+      const current = (accounts ?? []).filter(
+        (acc) => acc.metaapiAccountId && isPolling(acc.status)
+      );
+      if (current.length === 0) return;
+      await Promise.allSettled(current.map((acc) => refreshMasterAccountStatus(acc.id!)));
+      await qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() });
+    };
+
+    intervalRef.current = setInterval(() => { void tick(); }, POLL_INTERVAL_MS);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [hasPolling, accounts, qc]);
 
   const { mutate: create, isPending: creating } = useCreateMasterAccount({
     mutation: {
@@ -89,9 +130,17 @@ export default function MasterAccountsPage() {
             <h1 className="text-2xl font-bold text-foreground">Master Accounts</h1>
             <p className="text-sm text-muted-foreground mt-1">Signal provider MT5 accounts copied from via MetaApi CopyFactory</p>
           </div>
-          <Button onClick={() => { setError(""); setOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" /> Add Master
-          </Button>
+          <div className="flex items-center gap-3">
+            {hasPolling && (
+              <div className="flex items-center gap-1.5 text-xs text-blue-400">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                Auto-refreshing
+              </div>
+            )}
+            <Button onClick={() => { setError(""); setOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" /> Add Master
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -111,61 +160,67 @@ export default function MasterAccountsPage() {
           </Card>
         ) : (
           <div className="grid gap-4">
-            {accounts.map((acc) => (
-              <Card key={acc.id} className="border-border hover:border-blue-600/30 transition-colors">
-                <CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 min-w-0">
-                      <div className="h-10 w-10 rounded-lg bg-blue-600/10 flex items-center justify-center shrink-0">
-                        <Server className="h-5 w-5 text-blue-400" />
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
-                        <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
-                        {acc.metaapiAccountId ? (
-                          <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
-                            MetaApi ID: {acc.metaapiAccountId}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-red-400">No MetaApi ID — creation failed</p>
-                        )}
-                        <div className="flex items-center gap-3 pt-1 flex-wrap">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-muted-foreground">Status:</span>
-                            <StatusBadge status={acc.status} />
+            {accounts.map((acc) => {
+              const settling = !!acc.metaapiAccountId && isPolling(acc.status);
+              return (
+                <Card
+                  key={acc.id}
+                  className={`border-border hover:border-blue-600/30 transition-colors ${settling ? "border-blue-600/20" : ""}`}
+                >
+                  <CardContent className="py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 min-w-0">
+                        <div className="h-10 w-10 rounded-lg bg-blue-600/10 flex items-center justify-center shrink-0">
+                          <Server className="h-5 w-5 text-blue-400" />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
+                          <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
+                          {acc.metaapiAccountId ? (
+                            <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
+                              MetaApi ID: {acc.metaapiAccountId}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-red-400">No MetaApi ID — creation failed</p>
+                          )}
+                          <div className="flex items-center gap-3 pt-1 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground">Status:</span>
+                              <StatusBadge status={acc.status} />
+                            </div>
+                            {acc.deploymentStatus && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">Deploy:</span>
+                                <span className="text-xs font-mono text-muted-foreground">{acc.deploymentStatus}</span>
+                              </div>
+                            )}
+                            {acc.connectionStatus && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">Connection:</span>
+                                <span className={`text-xs font-mono ${acc.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
+                                  {acc.connectionStatus}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {acc.deploymentStatus && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-muted-foreground">Deploy:</span>
-                              <span className="text-xs font-mono text-muted-foreground">{acc.deploymentStatus}</span>
-                            </div>
-                          )}
-                          {acc.connectionStatus && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-muted-foreground">Connection:</span>
-                              <span className={`text-xs font-mono ${acc.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
-                                {acc.connectionStatus}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {acc.metaapiAccountId && <RefreshButton accountId={acc.id!} />}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteId(acc.id!)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {acc.metaapiAccountId && <RefreshButton accountId={acc.id!} />}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                        onClick={() => setDeleteId(acc.id!)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -202,8 +257,7 @@ export default function MasterAccountsPage() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Submitting creates a real MetaApi account and deploys it. The MetaApi ID is stored automatically.
-                Use the refresh button on the account card to poll the live connection status from MetaApi.
+                Submitting creates a real MetaApi account and deploys it. Status will auto-refresh every 10 seconds until connected or disconnected.
               </p>
             </div>
             <DialogFooter>
