@@ -134,10 +134,29 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
       }),
     });
 
-    const stkData = (await stkResponse.json()) as { CheckoutRequestID?: string; errorMessage?: string };
+    const stkData = (await stkResponse.json()) as {
+      CheckoutRequestID?: string;
+      ResponseCode?: string;
+      ResponseDescription?: string;
+      errorCode?: string;
+      errorMessage?: string;
+      requestId?: string;
+    };
 
     if (!stkData.CheckoutRequestID) {
-      res.status(400).json({ error: stkData.errorMessage ?? "STK Push failed" });
+      logger.error(
+        {
+          errorCode: stkData.errorCode,
+          errorMessage: stkData.errorMessage,
+          responseCode: stkData.ResponseCode,
+          responseDescription: stkData.ResponseDescription,
+          callbackUrlDomain: callbackUrl ? new URL(callbackUrl).hostname : "NOT_SET",
+          httpStatus: stkResponse.status,
+        },
+        "STK Push rejected by Safaricom"
+      );
+      const detail = stkData.errorMessage ?? stkData.ResponseDescription ?? "STK Push failed";
+      res.status(400).json({ error: detail, code: stkData.errorCode ?? stkData.ResponseCode });
       return;
     }
 
