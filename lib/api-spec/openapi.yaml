@@ -3,13 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PESAMATRIX V2 - Cloud-to-Cloud Copy Trading Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User management
+  - name: subscriptions
+    description: Subscription management
+  - name: payments
+    description: M-Pesa payment operations
+  - name: masterAccounts
+    description: Master MT5 account management
+  - name: slaveAccounts
+    description: Slave MT5 account management
+  - name: strategies
+    description: Copy trading strategy management
+  - name: bindings
+    description: Subscriber-to-strategy binding management
+  - name: tradeLogs
+    description: Trade log operations
+  - name: admin
+    description: Admin dashboard operations
+  - name: dashboard
+    description: Dashboard summary operations
+
 paths:
   /healthz:
     get:
@@ -24,6 +47,580 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # AUTH
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Send password reset email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordInput"
+      responses:
+        "200":
+          description: Reset email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # USERS
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # SUBSCRIPTIONS
+  /subscriptions/my:
+    get:
+      operationId: getMySubscription
+      tags: [subscriptions]
+      summary: Get current user's subscription status
+      responses:
+        "200":
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  # PAYMENTS
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [payments]
+      summary: List current user's payment history
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: initiatePayment
+      tags: [payments]
+      summary: Initiate M-Pesa STK Push payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: STK Push initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentInitResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /payments/callback:
+    post:
+      operationId: mpesaCallback
+      tags: [payments]
+      summary: M-Pesa callback endpoint (called by Safaricom)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MpesaCallbackInput"
+      responses:
+        "200":
+          description: Callback processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # MASTER ACCOUNTS
+  /master-accounts:
+    get:
+      operationId: listMasterAccounts
+      tags: [masterAccounts]
+      summary: List current user's master accounts
+      responses:
+        "200":
+          description: List of master accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MasterAccount"
+    post:
+      operationId: createMasterAccount
+      tags: [masterAccounts]
+      summary: Create a new master MT5 account via MetaApi
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MasterAccountInput"
+      responses:
+        "201":
+          description: Master account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterAccount"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /master-accounts/{id}:
+    get:
+      operationId: getMasterAccount
+      tags: [masterAccounts]
+      summary: Get a master account by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Master account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MasterAccount"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteMasterAccount
+      tags: [masterAccounts]
+      summary: Delete a master account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # SLAVE ACCOUNTS
+  /slave-accounts:
+    get:
+      operationId: listSlaveAccounts
+      tags: [slaveAccounts]
+      summary: List current user's slave accounts
+      responses:
+        "200":
+          description: List of slave accounts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SlaveAccount"
+    post:
+      operationId: createSlaveAccount
+      tags: [slaveAccounts]
+      summary: Create a new slave MT5 account via MetaApi CopyFactory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SlaveAccountInput"
+      responses:
+        "201":
+          description: Slave account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaveAccount"
+        "400":
+          description: Invalid request or subscription required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /slave-accounts/{id}:
+    delete:
+      operationId: deleteSlaveAccount
+      tags: [slaveAccounts]
+      summary: Delete a slave account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # STRATEGIES
+  /strategies:
+    get:
+      operationId: listStrategies
+      tags: [strategies]
+      summary: List current user's strategies
+      responses:
+        "200":
+          description: List of strategies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Strategy"
+    post:
+      operationId: createStrategy
+      tags: [strategies]
+      summary: Create a new CopyFactory strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StrategyInput"
+      responses:
+        "201":
+          description: Strategy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Strategy"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /strategies/{id}:
+    delete:
+      operationId: deleteStrategy
+      tags: [strategies]
+      summary: Delete a strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # BINDINGS
+  /bindings:
+    get:
+      operationId: listBindings
+      tags: [bindings]
+      summary: List current user's subscriber bindings
+      responses:
+        "200":
+          description: List of bindings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Binding"
+    post:
+      operationId: createBinding
+      tags: [bindings]
+      summary: Bind a slave account to a strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BindingInput"
+      responses:
+        "201":
+          description: Binding created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Binding"
+        "400":
+          description: Invalid or subscription required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bindings/{id}:
+    delete:
+      operationId: deleteBinding
+      tags: [bindings]
+      summary: Unbind a slave account from a strategy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # TRADE LOGS
+  /trade-logs:
+    get:
+      operationId: listTradeLogs
+      tags: [tradeLogs]
+      summary: List recent trade log entries for current user
+      responses:
+        "200":
+          description: List of trade logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradeLog"
+
+  # DASHBOARD SUMMARY (wow endpoint)
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get aggregated dashboard summary for current user
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  # ADMIN
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get platform-wide admin stats
+      responses:
+        "200":
+          description: Admin statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: Admin list of all users with subscription info
+      responses:
+        "200":
+          description: List of users with subscription info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}/suspend:
+    patch:
+      operationId: suspendUser
+      tags: [admin]
+      summary: Suspend a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{id}/activate:
+    patch:
+      operationId: activateUser
+      tags: [admin]
+      summary: Activate a suspended user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/payments:
+    get:
+      operationId: listAdminPayments
+      tags: [admin]
+      summary: Admin list of all payments
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      tags: [admin]
+      summary: Get platform settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+    patch:
+      operationId: updateAdminSettings
+      tags: [admin]
+      summary: Update platform settings (daily fee, min/max days)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSettingsUpdate"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSettings"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +631,425 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    # AUTH
+    RegisterInput:
+      type: object
+      required: [name, email, phone, password]
+      properties:
+        name:
+          type: string
+          minLength: 2
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+          minLength: 6
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    # USER
+    User:
+      type: object
+      required: [id, name, email, phone, role, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        status:
+          type: string
+          enum: [active, suspended]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        password:
+          type: string
+          minLength: 6
+
+    # SUBSCRIPTION
+    Subscription:
+      type: object
+      required: [id, userId, status, daysPaid, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: string
+          enum: [active, expired, suspended]
+        startDate:
+          type: ["string", "null"]
+          format: date-time
+        endDate:
+          type: ["string", "null"]
+          format: date-time
+        daysPaid:
+          type: integer
+        remainingTradingDays:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    # PAYMENT
+    PaymentInput:
+      type: object
+      required: [phone, days]
+      properties:
+        phone:
+          type: string
+        days:
+          type: integer
+          minimum: 1
+          maximum: 365
+
+    PaymentInitResponse:
+      type: object
+      required: [checkoutRequestId, message]
+      properties:
+        checkoutRequestId:
+          type: string
+        message:
+          type: string
+        amount:
+          type: number
+
+    MpesaCallbackInput:
+      type: object
+      properties:
+        Body:
+          type: object
+
+    Payment:
+      type: object
+      required: [id, userId, phone, amount, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        phone:
+          type: string
+        amount:
+          type: number
+        mpesaReceipt:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, completed, failed]
+        days:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    # MASTER ACCOUNT
+    MasterAccountInput:
+      type: object
+      required: [broker, server, mt5Login, investorPassword]
+      properties:
+        broker:
+          type: string
+        server:
+          type: string
+        mt5Login:
+          type: string
+        investorPassword:
+          type: string
+
+    MasterAccount:
+      type: object
+      required: [id, userId, mt5Login, broker, server, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        metaapiAccountId:
+          type: ["string", "null"]
+        mt5Login:
+          type: string
+        broker:
+          type: string
+        server:
+          type: string
+        status:
+          type: string
+          enum: [connecting, connected, disconnected, error]
+        createdAt:
+          type: string
+          format: date-time
+
+    # SLAVE ACCOUNT
+    SlaveAccountInput:
+      type: object
+      required: [broker, server, mt5Login, investorPassword]
+      properties:
+        broker:
+          type: string
+        server:
+          type: string
+        mt5Login:
+          type: string
+        investorPassword:
+          type: string
+
+    SlaveAccount:
+      type: object
+      required: [id, userId, mt5Login, broker, server, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        metaapiAccountId:
+          type: ["string", "null"]
+        subscriberId:
+          type: ["string", "null"]
+        mt5Login:
+          type: string
+        broker:
+          type: string
+        server:
+          type: string
+        status:
+          type: string
+          enum: [connecting, connected, disconnected, suspended, error]
+        createdAt:
+          type: string
+          format: date-time
+
+    # STRATEGY
+    StrategyInput:
+      type: object
+      required: [strategyName, masterAccountId]
+      properties:
+        strategyName:
+          type: string
+          minLength: 2
+        masterAccountId:
+          type: integer
+
+    Strategy:
+      type: object
+      required: [id, userId, strategyName, masterAccountId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        copyfactoryStrategyId:
+          type: ["string", "null"]
+        strategyName:
+          type: string
+        masterAccountId:
+          type: integer
+        status:
+          type: string
+          enum: [active, paused, error]
+        createdAt:
+          type: string
+          format: date-time
+
+    # BINDING
+    BindingInput:
+      type: object
+      required: [strategyId, slaveAccountId, riskMultiplier]
+      properties:
+        strategyId:
+          type: integer
+        slaveAccountId:
+          type: integer
+        riskMultiplier:
+          type: number
+          minimum: 0.1
+          maximum: 10
+
+    Binding:
+      type: object
+      required: [id, strategyId, slaveAccountId, riskMultiplier, status, createdAt]
+      properties:
+        id:
+          type: integer
+        strategyId:
+          type: integer
+        slaveAccountId:
+          type: integer
+        riskMultiplier:
+          type: number
+        status:
+          type: string
+          enum: [active, suspended]
+        createdAt:
+          type: string
+          format: date-time
+
+    # TRADE LOG
+    TradeLog:
+      type: object
+      required: [id, strategyId, action, createdAt]
+      properties:
+        id:
+          type: integer
+        strategyId:
+          type: integer
+        slaveAccountId:
+          type: ["integer", "null"]
+        action:
+          type: string
+        details:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    # DASHBOARD
+    DashboardSummary:
+      type: object
+      required: [subscription, masterAccounts, slaveAccounts, strategies, activeBindings, recentPayments, recentTradeLogs]
+      properties:
+        subscription:
+          $ref: "#/components/schemas/Subscription"
+        masterAccounts:
+          type: integer
+        slaveAccounts:
+          type: integer
+        strategies:
+          type: integer
+        activeBindings:
+          type: integer
+        recentPayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+        recentTradeLogs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradeLog"
+
+    # ADMIN
+    AdminStats:
+      type: object
+      required: [totalUsers, activeSubscriptions, totalRevenue, activeSlaveAccounts, activeStrategies, totalPayments]
+      properties:
+        totalUsers:
+          type: integer
+        activeSubscriptions:
+          type: integer
+        totalRevenue:
+          type: number
+        activeSlaveAccounts:
+          type: integer
+        activeStrategies:
+          type: integer
+        totalPayments:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [id, name, email, phone, role, status, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        subscriptionStatus:
+          type: ["string", "null"]
+        remainingDays:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminSettings:
+      type: object
+      required: [id, dailyFee, minDays, maxDays]
+      properties:
+        id:
+          type: integer
+        dailyFee:
+          type: number
+        minDays:
+          type: integer
+        maxDays:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminSettingsUpdate:
+      type: object
+      properties:
+        dailyFee:
+          type: number
+          minimum: 1
+        minDays:
+          type: integer
+          minimum: 1
+        maxDays:
+          type: integer
+          maximum: 365

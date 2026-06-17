@@ -1,0 +1,1 @@
+- [Orval hook naming](orval-naming.md) — generated hooks use useList* for GET-all, query key functions use getList*/getGet* prefixes; never guess, grep the generated file.

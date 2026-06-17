@@ -1,0 +1,201 @@
+import { useState } from "react";
+import { AppLayout } from "@/components/layout/app-layout";
+import {
+  useListStrategies,
+  useCreateStrategy,
+  useDeleteStrategy,
+  useListMasterAccounts,
+  getListStrategiesQueryKey,
+} from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { GitBranch, Plus, Trash2, RefreshCw, AlertCircle, Server } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+
+export default function StrategiesPage() {
+  const qc = useQueryClient();
+  const { data: strategies, isLoading } = useListStrategies();
+  const { data: masterAccounts } = useListMasterAccounts();
+  const [open, setOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState({ name: "", description: "", masterAccountId: 0 });
+  const [error, setError] = useState("");
+
+  const { mutate: create, isPending: creating } = useCreateStrategy({
+    mutation: {
+      onSuccess: () => {
+        setOpen(false);
+        setForm({ name: "", description: "", masterAccountId: 0 });
+        qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() });
+      },
+      onError: (err: unknown) => {
+        const e = err as { data?: { error?: string } };
+        setError(e?.data?.error ?? "Failed to create strategy");
+      },
+    },
+  });
+
+  const { mutate: del } = useDeleteStrategy({
+    mutation: {
+      onSuccess: () => qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() }),
+    },
+  });
+
+  return (
+    <AppLayout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Strategies</h1>
+            <p className="text-sm text-muted-foreground mt-1">CopyFactory strategies defining how trades are copied</p>
+          </div>
+          <Button onClick={() => { setError(""); setOpen(true); }} className="bg-blue-600 hover:bg-blue-700" disabled={!masterAccounts?.length}>
+            <Plus className="h-4 w-4 mr-2" /> New Strategy
+          </Button>
+        </div>
+
+        {!masterAccounts?.length && (
+          <Card className="border-orange-500/30 bg-orange-500/5">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-2 text-sm text-orange-400">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <p>You need at least one master account before creating a strategy.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : !strategies?.length ? (
+          <Card className="border-border">
+            <CardContent className="flex flex-col items-center py-12 text-center">
+              <GitBranch className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <h3 className="font-semibold text-foreground">No strategies yet</h3>
+              <p className="text-sm text-muted-foreground mt-1">Create a CopyFactory strategy to start copying</p>
+              <Button onClick={() => setOpen(true)} className="mt-4 bg-blue-600 hover:bg-blue-700" disabled={!masterAccounts?.length}>
+                <Plus className="h-4 w-4 mr-2" /> New Strategy
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {strategies.map((s) => {
+              const master = masterAccounts?.find((m) => m.id === s.masterAccountId);
+              return (
+                <Card key={s.id} className="border-border hover:border-blue-600/30 transition-colors">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-lg bg-green-600/10 flex items-center justify-center shrink-0">
+                          <GitBranch className="h-5 w-5 text-green-400" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">{s.name}</p>
+                          {s.description && <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>}
+                          {master && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <Server className="h-3 w-3 text-blue-400" />
+                              <span className="text-xs text-blue-400">{master.name}</span>
+                            </div>
+                          )}
+                          {s.copyfactoryStrategyId && (
+                            <p className="text-xs text-muted-foreground font-mono mt-0.5">CF: {s.copyfactoryStrategyId}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge className={s.status === "active" ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"}>
+                          {s.status ?? "pending"}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteId(s.id!)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="dark bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>New Strategy</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                  <AlertCircle className="h-4 w-4" /> {error}
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Strategy Name</Label>
+                <Input placeholder="My Strategy" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Master Account</Label>
+                <select
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                  value={form.masterAccountId}
+                  onChange={(e) => setForm({ ...form, masterAccountId: parseInt(e.target.value) })}
+                >
+                  <option value={0}>Select master account...</option>
+                  {masterAccounts?.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                disabled={creating || !form.name || !form.masterAccountId}
+                onClick={() => create({ data: { name: form.name, description: form.description, masterAccountId: form.masterAccountId } })}
+              >
+                {creating ? "Creating..." : "Create Strategy"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+          <AlertDialogContent className="dark bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Strategy?</AlertDialogTitle>
+              <AlertDialogDescription>This will remove the strategy and all associated bindings.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={() => { if (deleteId) del({ id: deleteId }); setDeleteId(null); }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </AppLayout>
+  );
+}
