@@ -40,7 +40,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (settings) {
-      setDailyFee(settings.dailyFee ?? "100");
+      setDailyFee(String(settings.dailyFee ?? 100));
       setMinDays(String(settings.minDays ?? 1));
       setMaxDays(String(settings.maxDays ?? 365));
       setMetaApiToken(settings.metaApiToken ?? "");
@@ -62,7 +62,7 @@ export default function AdminPage() {
     setSaveStatus("saving");
     updateSettings({
       data: {
-        dailyFee,
+        dailyFee: parseFloat(dailyFee),
         minDays: parseInt(minDays),
         maxDays: parseInt(maxDays),
         metaApiToken: metaApiToken.trim() || null,

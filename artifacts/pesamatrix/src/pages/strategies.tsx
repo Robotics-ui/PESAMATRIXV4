@@ -23,15 +23,15 @@ export default function StrategiesPage() {
   const { data: masterAccounts } = useListMasterAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", description: "", masterAccountId: 0 });
+  const [form, setForm] = useState({ strategyName: "", masterAccountId: 0 });
   const [error, setError] = useState("");
 
   const { mutate: create, isPending: creating } = useCreateStrategy({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", description: "", masterAccountId: 0 });
-        qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() });
+        setForm({ strategyName: "", masterAccountId: 0 });
+        void qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() });
       },
       onError: (err: unknown) => {
         const e = err as { data?: { error?: string } };
@@ -42,7 +42,7 @@ export default function StrategiesPage() {
 
   const { mutate: del } = useDeleteStrategy({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListStrategiesQueryKey() }),
     },
   });
 
@@ -98,12 +98,11 @@ export default function StrategiesPage() {
                           <GitBranch className="h-5 w-5 text-green-400" />
                         </div>
                         <div>
-                          <p className="font-semibold text-foreground">{s.name}</p>
-                          {s.description && <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>}
+                          <p className="font-semibold text-foreground">{s.strategyName}</p>
                           {master && (
                             <div className="flex items-center gap-1 mt-1">
                               <Server className="h-3 w-3 text-blue-400" />
-                              <span className="text-xs text-blue-400">{master.name}</span>
+                              <span className="text-xs text-blue-400">{master.mt5Login} · {master.broker}</span>
                             </div>
                           )}
                           {s.copyfactoryStrategyId && (
@@ -145,11 +144,7 @@ export default function StrategiesPage() {
               )}
               <div className="space-y-2">
                 <Label>Strategy Name</Label>
-                <Input placeholder="My Strategy" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <Input placeholder="Short description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                <Input placeholder="My Strategy" value={form.strategyName} onChange={(e) => setForm({ ...form, strategyName: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label>Master Account</Label>
@@ -160,7 +155,7 @@ export default function StrategiesPage() {
                 >
                   <option value={0}>Select master account...</option>
                   {masterAccounts?.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
+                    <option key={m.id} value={m.id}>{m.mt5Login} — {m.broker}</option>
                   ))}
                 </select>
               </div>
@@ -169,8 +164,8 @@ export default function StrategiesPage() {
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={creating || !form.name || !form.masterAccountId}
-                onClick={() => create({ data: { name: form.name, description: form.description, masterAccountId: form.masterAccountId } })}
+                disabled={creating || !form.strategyName || !form.masterAccountId}
+                onClick={() => create({ data: { strategyName: form.strategyName, masterAccountId: form.masterAccountId } })}
               >
                 {creating ? "Creating..." : "Create Strategy"}
               </Button>

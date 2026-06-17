@@ -25,15 +25,15 @@ export default function BindingsPage() {
   const { data: slaveAccounts } = useListSlaveAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ strategyId: 0, slaveAccountId: 0, multiplier: 1.0 });
+  const [form, setForm] = useState({ strategyId: 0, slaveAccountId: 0, riskMultiplier: 1.0 });
   const [error, setError] = useState("");
 
   const { mutate: create, isPending: creating } = useCreateBinding({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ strategyId: 0, slaveAccountId: 0, multiplier: 1.0 });
-        qc.invalidateQueries({ queryKey: getListBindingsQueryKey() });
+        setForm({ strategyId: 0, slaveAccountId: 0, riskMultiplier: 1.0 });
+        void qc.invalidateQueries({ queryKey: getListBindingsQueryKey() });
       },
       onError: (err: unknown) => {
         const e = err as { data?: { error?: string } };
@@ -44,7 +44,7 @@ export default function BindingsPage() {
 
   const { mutate: del } = useDeleteBinding({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListBindingsQueryKey() }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListBindingsQueryKey() }),
     },
   });
 
@@ -111,15 +111,15 @@ export default function BindingsPage() {
                         <div className="flex items-center gap-2 flex-wrap flex-1">
                           <div className="flex flex-col min-w-0">
                             <span className="text-xs text-muted-foreground">Strategy</span>
-                            <span className="text-sm font-medium text-foreground truncate">{strategy?.name ?? `#${b.strategyId}`}</span>
+                            <span className="text-sm font-medium text-foreground truncate">{strategy?.strategyName ?? `#${b.strategyId}`}</span>
                           </div>
                           <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
                           <div className="flex flex-col min-w-0">
                             <span className="text-xs text-muted-foreground">Slave</span>
-                            <span className="text-sm font-medium text-foreground truncate">{slave?.name ?? `#${b.slaveAccountId}`}</span>
+                            <span className="text-sm font-medium text-foreground truncate">{slave?.mt5Login ?? `#${b.slaveAccountId}`}</span>
                           </div>
-                          {b.multiplier != null && (
-                            <Badge variant="outline" className="text-xs text-muted-foreground">{b.multiplier}×</Badge>
+                          {b.riskMultiplier != null && (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">{b.riskMultiplier}×</Badge>
                           )}
                         </div>
                       </div>
@@ -162,7 +162,7 @@ export default function BindingsPage() {
                 >
                   <option value={0}>Select strategy...</option>
                   {strategies?.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>{s.strategyName}</option>
                   ))}
                 </select>
               </div>
@@ -175,19 +175,19 @@ export default function BindingsPage() {
                 >
                   <option value={0}>Select slave account...</option>
                   {slaveAccounts?.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>{s.mt5Login} — {s.broker}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Lot Multiplier</Label>
+                <Label>Risk Multiplier</Label>
                 <Input
                   type="number"
                   step="0.1"
                   min="0.1"
                   max="10"
-                  value={form.multiplier}
-                  onChange={(e) => setForm({ ...form, multiplier: parseFloat(e.target.value) || 1 })}
+                  value={form.riskMultiplier}
+                  onChange={(e) => setForm({ ...form, riskMultiplier: parseFloat(e.target.value) || 1 })}
                 />
                 <p className="text-xs text-muted-foreground">1.0 = copy same lot size as master</p>
               </div>
@@ -197,7 +197,7 @@ export default function BindingsPage() {
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
                 disabled={creating || !form.strategyId || !form.slaveAccountId}
-                onClick={() => create({ data: { strategyId: form.strategyId, slaveAccountId: form.slaveAccountId, multiplier: form.multiplier } })}
+                onClick={() => create({ data: { strategyId: form.strategyId, slaveAccountId: form.slaveAccountId, riskMultiplier: form.riskMultiplier } })}
               >
                 {creating ? "Creating..." : "Create Binding"}
               </Button>

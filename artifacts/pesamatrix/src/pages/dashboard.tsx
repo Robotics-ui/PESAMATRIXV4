@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import {
   TrendingUp,
-  TrendingDown,
   Server,
   Users,
   GitBranch,
@@ -212,26 +211,24 @@ export default function DashboardPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-blue-400" />
-                Recent Trades
+                Recent Trade Activity
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {summary.recentTradeLogs.map((log) => {
-                  const profit = parseFloat(log.profit ?? "0");
-                  return (
-                    <div key={log.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-sm">
-                      <div className="flex items-center gap-3">
-                        <span className={`font-medium ${log.type === "buy" ? "text-green-400" : "text-red-400"}`}>{log.type?.toUpperCase()}</span>
-                        <span className="text-foreground font-semibold">{log.symbol}</span>
-                        <span className="text-muted-foreground">{log.volume}</span>
-                      </div>
-                      <span className={`font-semibold ${profit >= 0 ? "text-green-400" : "text-red-400"}`}>
-                        {profit >= 0 ? "+" : ""}{profit.toFixed(2)}
-                      </span>
+                {summary.recentTradeLogs.map((log) => (
+                  <div key={log.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 text-sm">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-xs font-mono">{log.action}</Badge>
+                      {log.details && (
+                        <span className="text-muted-foreground text-xs truncate max-w-[200px]">{log.details}</span>
+                      )}
                     </div>
-                  );
-                })}
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {new Date(log.createdAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

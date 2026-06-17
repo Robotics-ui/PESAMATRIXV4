@@ -6,7 +6,7 @@ import {
   useDeleteMasterAccount,
   getListMasterAccountsQueryKey,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,15 +21,15 @@ export default function MasterAccountsPage() {
   const { data: accounts, isLoading } = useListMasterAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", metaapiAccountId: "", login: "", password: "", server: "", platform: "mt4" });
+  const [form, setForm] = useState({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
   const [error, setError] = useState("");
 
   const { mutate: create, isPending: creating } = useCreateMasterAccount({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", metaapiAccountId: "", login: "", password: "", server: "", platform: "mt4" });
-        qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() });
+        setForm({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
+        void qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() });
       },
       onError: (err: unknown) => {
         const e = err as { data?: { error?: string } };
@@ -40,13 +40,14 @@ export default function MasterAccountsPage() {
 
   const { mutate: del } = useDeleteMasterAccount({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() }),
     },
   });
 
   const statusColor = (s?: string) => {
-    if (s === "active" || s === "deployed") return "bg-green-500/20 text-green-400 border-green-500/30";
+    if (s === "connected") return "bg-green-500/20 text-green-400 border-green-500/30";
     if (s === "connecting") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    if (s === "disconnected") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
     return "bg-red-500/20 text-red-400 border-red-500/30";
   };
 
@@ -98,9 +99,9 @@ export default function MasterAccountsPage() {
                         <Server className="h-5 w-5 text-blue-400" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{acc.name}</p>
+                        <p className="font-semibold text-foreground">{acc.mt5Login}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {acc.login} · {acc.server} · {acc.platform?.toUpperCase()}
+                          {acc.broker} · {acc.server}
                         </p>
                         {acc.metaapiAccountId && (
                           <p className="text-xs text-muted-foreground mt-0.5 font-mono">ID: {acc.metaapiAccountId}</p>
@@ -138,21 +139,17 @@ export default function MasterAccountsPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Account Name</Label>
-                <Input placeholder="My Master Account" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
                 <Label>MetaApi Account ID <span className="text-muted-foreground text-xs">(optional in demo)</span></Label>
                 <Input placeholder="metaapi-account-id" value={form.metaapiAccountId} onChange={(e) => setForm({ ...form, metaapiAccountId: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>MT Login</Label>
-                  <Input placeholder="12345678" value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} />
+                  <Label>MT5 Login</Label>
+                  <Input placeholder="12345678" value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>MT Password</Label>
-                  <Input type="password" placeholder="••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                  <Label>Investor Password</Label>
+                  <Input type="password" placeholder="••••••••" value={form.investorPassword} onChange={(e) => setForm({ ...form, investorPassword: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -161,15 +158,8 @@ export default function MasterAccountsPage() {
                   <Input placeholder="ICMarkets-Live" value={form.server} onChange={(e) => setForm({ ...form, server: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Platform</Label>
-                  <select
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                    value={form.platform}
-                    onChange={(e) => setForm({ ...form, platform: e.target.value })}
-                  >
-                    <option value="mt4">MT4</option>
-                    <option value="mt5">MT5</option>
-                  </select>
+                  <Label>Broker</Label>
+                  <Input placeholder="ICMarkets" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -177,8 +167,8 @@ export default function MasterAccountsPage() {
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={creating || !form.name}
-                onClick={() => create({ data: form as Parameters<typeof create>[0]["data"] })}
+                disabled={creating || !form.mt5Login || !form.broker}
+                onClick={() => create({ data: { mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
               >
                 {creating ? "Adding..." : "Add Account"}
               </Button>

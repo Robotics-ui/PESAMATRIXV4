@@ -21,15 +21,15 @@ export default function SlaveAccountsPage() {
   const { data: accounts, isLoading } = useListSlaveAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", metaapiAccountId: "", login: "", password: "", server: "", platform: "mt4" });
+  const [form, setForm] = useState({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
   const [error, setError] = useState("");
 
   const { mutate: create, isPending: creating } = useCreateSlaveAccount({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ name: "", metaapiAccountId: "", login: "", password: "", server: "", platform: "mt4" });
-        qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() });
+        setForm({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
+        void qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() });
       },
       onError: (err: unknown) => {
         const e = err as { data?: { error?: string } };
@@ -40,14 +40,15 @@ export default function SlaveAccountsPage() {
 
   const { mutate: del } = useDeleteSlaveAccount({
     mutation: {
-      onSuccess: () => qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() }),
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() }),
     },
   });
 
   const statusColor = (s?: string) => {
-    if (s === "active" || s === "deployed") return "bg-green-500/20 text-green-400 border-green-500/30";
+    if (s === "connected") return "bg-green-500/20 text-green-400 border-green-500/30";
     if (s === "suspended") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
     if (s === "connecting") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+    if (s === "disconnected") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
     return "bg-red-500/20 text-red-400 border-red-500/30";
   };
 
@@ -99,9 +100,9 @@ export default function SlaveAccountsPage() {
                         <Users className="h-5 w-5 text-green-400" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{acc.name}</p>
+                        <p className="font-semibold text-foreground">{acc.mt5Login}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {acc.login} · {acc.server} · {acc.platform?.toUpperCase()}
+                          {acc.broker} · {acc.server}
                         </p>
                         {acc.metaapiAccountId && (
                           <p className="text-xs text-muted-foreground mt-0.5 font-mono">ID: {acc.metaapiAccountId}</p>
@@ -138,21 +139,17 @@ export default function SlaveAccountsPage() {
                 </div>
               )}
               <div className="space-y-2">
-                <Label>Account Name</Label>
-                <Input placeholder="My Slave Account" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-2">
                 <Label>MetaApi Account ID <span className="text-muted-foreground text-xs">(optional in demo)</span></Label>
                 <Input placeholder="metaapi-account-id" value={form.metaapiAccountId} onChange={(e) => setForm({ ...form, metaapiAccountId: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>MT Login</Label>
-                  <Input placeholder="12345678" value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} />
+                  <Label>MT5 Login</Label>
+                  <Input placeholder="12345678" value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>MT Password</Label>
-                  <Input type="password" placeholder="••••••••" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                  <Label>Investor Password</Label>
+                  <Input type="password" placeholder="••••••••" value={form.investorPassword} onChange={(e) => setForm({ ...form, investorPassword: e.target.value })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -161,15 +158,8 @@ export default function SlaveAccountsPage() {
                   <Input placeholder="ICMarkets-Live" value={form.server} onChange={(e) => setForm({ ...form, server: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Platform</Label>
-                  <select
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                    value={form.platform}
-                    onChange={(e) => setForm({ ...form, platform: e.target.value })}
-                  >
-                    <option value="mt4">MT4</option>
-                    <option value="mt5">MT5</option>
-                  </select>
+                  <Label>Broker</Label>
+                  <Input placeholder="ICMarkets" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} />
                 </div>
               </div>
             </div>
@@ -177,8 +167,8 @@ export default function SlaveAccountsPage() {
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={creating || !form.name}
-                onClick={() => create({ data: form as Parameters<typeof create>[0]["data"] })}
+                disabled={creating || !form.mt5Login || !form.broker}
+                onClick={() => create({ data: { mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
               >
                 {creating ? "Adding..." : "Add Account"}
               </Button>
