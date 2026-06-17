@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
+import { seedDefaultAccounts } from "./lib/seed";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,6 +44,9 @@ if (process.env.NODE_ENV === "production") {
     res.sendFile(path.join(staticDir, "index.html"));
   });
 }
+
+// Seed default accounts on first run
+void seedDefaultAccounts();
 
 // Start the subscription expiry scheduler
 startScheduler();
