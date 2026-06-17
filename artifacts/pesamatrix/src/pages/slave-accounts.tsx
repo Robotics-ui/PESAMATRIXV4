@@ -4,6 +4,7 @@ import {
   useListSlaveAccounts,
   useCreateSlaveAccount,
   useDeleteSlaveAccount,
+  refreshSlaveAccountStatus,
   getListSlaveAccountsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,19 +17,56 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Users, Plus, Trash2, RefreshCw, AlertCircle, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
+function StatusBadge({ status }: { status?: string | null }) {
+  if (status === "connected") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Connected</Badge>;
+  if (status === "deploying") return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Deploying</Badge>;
+  if (status === "connecting") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Connecting</Badge>;
+  if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
+  if (status === "suspended") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Suspended</Badge>;
+  return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{status ?? "error"}</Badge>;
+}
+
+function RefreshButton({ accountId }: { accountId: number }) {
+  const qc = useQueryClient();
+  const [loading, setLoading] = useState(false);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      await refreshSlaveAccountStatus(accountId);
+      await qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-muted-foreground hover:text-blue-400"
+      title="Refresh status from MetaApi"
+      onClick={() => void handleRefresh()}
+      disabled={loading}
+    >
+      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+    </Button>
+  );
+}
+
 export default function SlaveAccountsPage() {
   const qc = useQueryClient();
   const { data: accounts, isLoading } = useListSlaveAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
+  const [form, setForm] = useState({ mt5Login: "", investorPassword: "", server: "", broker: "" });
   const [error, setError] = useState("");
 
   const { mutate: create, isPending: creating } = useCreateSlaveAccount({
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ metaapiAccountId: "", mt5Login: "", investorPassword: "", server: "", broker: "" });
+        setForm({ mt5Login: "", investorPassword: "", server: "", broker: "" });
         void qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() });
       },
       onError: (err: unknown) => {
@@ -43,14 +81,6 @@ export default function SlaveAccountsPage() {
       onSuccess: () => void qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() }),
     },
   });
-
-  const statusColor = (s?: string) => {
-    if (s === "connected") return "bg-green-500/20 text-green-400 border-green-500/30";
-    if (s === "suspended") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-    if (s === "connecting") return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-    if (s === "disconnected") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-    return "bg-red-500/20 text-red-400 border-red-500/30";
-  };
 
   return (
     <AppLayout>
@@ -94,23 +124,45 @@ export default function SlaveAccountsPage() {
             {accounts.map((acc) => (
               <Card key={acc.id} className="border-border hover:border-blue-600/30 transition-colors">
                 <CardContent className="py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 min-w-0">
                       <div className="h-10 w-10 rounded-lg bg-green-600/10 flex items-center justify-center shrink-0">
                         <Users className="h-5 w-5 text-green-400" />
                       </div>
-                      <div>
-                        <p className="font-semibold text-foreground">{acc.mt5Login}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {acc.broker} · {acc.server}
-                        </p>
-                        {acc.metaapiAccountId && (
-                          <p className="text-xs text-muted-foreground mt-0.5 font-mono">ID: {acc.metaapiAccountId}</p>
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
+                        <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
+                        {acc.metaapiAccountId ? (
+                          <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
+                            MetaApi ID: {acc.metaapiAccountId}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-red-400">No MetaApi ID — creation failed</p>
                         )}
+                        <div className="flex items-center gap-3 pt-1 flex-wrap">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-muted-foreground">Status:</span>
+                            <StatusBadge status={acc.status} />
+                          </div>
+                          {acc.deploymentStatus && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground">Deploy:</span>
+                              <span className="text-xs font-mono text-muted-foreground">{acc.deploymentStatus}</span>
+                            </div>
+                          )}
+                          {acc.connectionStatus && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-muted-foreground">Connection:</span>
+                              <span className={`text-xs font-mono ${acc.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
+                                {acc.connectionStatus}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <Badge className={statusColor(acc.status)}>{acc.status ?? "pending"}</Badge>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {acc.metaapiAccountId && <RefreshButton accountId={acc.id!} />}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -138,10 +190,6 @@ export default function SlaveAccountsPage() {
                   <AlertCircle className="h-4 w-4" /> {error}
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>MetaApi Account ID <span className="text-muted-foreground text-xs">(optional in demo)</span></Label>
-                <Input placeholder="metaapi-account-id" value={form.metaapiAccountId} onChange={(e) => setForm({ ...form, metaapiAccountId: e.target.value })} />
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>MT5 Login</Label>
@@ -162,15 +210,19 @@ export default function SlaveAccountsPage() {
                   <Input placeholder="ICMarkets" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} />
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Submitting creates a real MetaApi account and deploys it. The MetaApi ID is stored automatically.
+                Use the refresh button on the account card to poll the live connection status from MetaApi.
+              </p>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={creating || !form.mt5Login || !form.broker}
+                disabled={creating || !form.mt5Login || !form.broker || !form.investorPassword}
                 onClick={() => create({ data: { mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
               >
-                {creating ? "Adding..." : "Add Account"}
+                {creating ? "Creating..." : "Add Account"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -180,7 +232,9 @@ export default function SlaveAccountsPage() {
           <AlertDialogContent className="dark bg-card border-border">
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Slave Account?</AlertDialogTitle>
-              <AlertDialogDescription>This will remove the account and all associated bindings. This cannot be undone.</AlertDialogDescription>
+              <AlertDialogDescription>
+                This will undeploy the account from MetaApi and remove it along with all associated bindings. This cannot be undone.
+              </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>

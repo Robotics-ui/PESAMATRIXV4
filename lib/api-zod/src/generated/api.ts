@@ -282,7 +282,9 @@ export const ListSlaveAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['connecting', 'connected', 'disconnected', 'suspended', 'error']),
+  "status": zod.enum(['deploying', 'connecting', 'connected', 'disconnected', 'suspended', 'error']),
+  "deploymentStatus": zod.string().nullish(),
+  "connectionStatus": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListSlaveAccountsResponse = zod.array(ListSlaveAccountsResponseItem)
@@ -304,6 +306,28 @@ export const CreateSlaveAccountBody = zod.object({
  */
 export const DeleteSlaveAccountParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Refresh slave account status from MetaApi
+ */
+export const RefreshSlaveAccountStatusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RefreshSlaveAccountStatusResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "metaapiAccountId": zod.string().nullish(),
+  "subscriberId": zod.string().nullish(),
+  "mt5Login": zod.string(),
+  "broker": zod.string(),
+  "server": zod.string(),
+  "status": zod.enum(['deploying', 'connecting', 'connected', 'disconnected', 'suspended', 'error']),
+  "deploymentStatus": zod.string().nullish(),
+  "connectionStatus": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
 })
 
 

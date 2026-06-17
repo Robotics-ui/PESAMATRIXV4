@@ -18,5 +18,9 @@ export interface SlaveAccount {
   broker: string;
   server: string;
   status: SlaveAccountStatus;
+  /** @nullable */
+  deploymentStatus?: string | null;
+  /** @nullable */
+  connectionStatus?: string | null;
   createdAt: Date;
 }

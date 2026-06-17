@@ -421,6 +421,31 @@ paths:
         "204":
           description: Deleted
 
+  /slave-accounts/{id}/refresh-status:
+    get:
+      operationId: refreshSlaveAccountStatus
+      tags: [slaveAccounts]
+      summary: Refresh slave account status from MetaApi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated slave account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SlaveAccount"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # STRATEGIES
   /strategies:
     get:
@@ -949,7 +974,11 @@ components:
           type: string
         status:
           type: string
-          enum: [connecting, connected, disconnected, suspended, error]
+          enum: [deploying, connecting, connected, disconnected, suspended, error]
+        deploymentStatus:
+          type: ["string", "null"]
+        connectionStatus:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time

@@ -10,6 +10,7 @@ export type SlaveAccountStatus = typeof SlaveAccountStatus[keyof typeof SlaveAcc
 
 
 export const SlaveAccountStatus = {
+  deploying: 'deploying',
   connecting: 'connecting',
   connected: 'connected',
   disconnected: 'disconnected',
