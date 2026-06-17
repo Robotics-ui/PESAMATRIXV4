@@ -11,7 +11,7 @@ env = { "CI" = "true" }
 [workflows]
 
 [agent]
-stack = "PNPM_WORKSPACE"
+stack = "BEST_EFFORT_FALLBACK"
 expertMode = true
 
 [postMerge]
