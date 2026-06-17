@@ -189,4 +189,25 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
   res.json({ ...settings, dailyFee: parseFloat(settings.dailyFee as string) });
 });
 
+router.get("/admin/integration-status", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+
+  const metaApiToken = !!(settings?.metaApiToken ?? process.env.METAAPI_TOKEN);
+  const consumerKey = !!process.env.MPESA_CONSUMER_KEY;
+  const consumerSecret = !!process.env.MPESA_CONSUMER_SECRET;
+  const passkey = !!process.env.MPESA_PASSKEY;
+  const shortcode = !!process.env.MPESA_SHORTCODE;
+  const callbackUrl = !!process.env.MPESA_CALLBACK_URL;
+  const webhookSecret = !!process.env.COPYFACTORY_WEBHOOK_SECRET;
+
+  const mpesaLive = consumerKey && consumerSecret && passkey && shortcode && callbackUrl;
+
+  res.json({
+    metaapi: { token: metaApiToken },
+    mpesa: { consumerKey, consumerSecret, passkey, shortcode, callbackUrl },
+    webhook: { secret: webhookSecret },
+    mode: mpesaLive ? "live" : "demo",
+  });
+});
+
 export default router;

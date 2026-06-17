@@ -31,6 +31,7 @@ import type {
   ErrorResponse,
   ForgotPasswordInput,
   HealthStatus,
+  IntegrationStatus,
   LoginInput,
   MasterAccount,
   MasterAccountInput,
@@ -2407,6 +2408,83 @@ export function useListAdminPayments<TData = Awaited<ReturnType<typeof listAdmin
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListAdminPaymentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetIntegrationStatusUrl = () => {
+
+
+
+
+  return `/api/admin/integration-status`
+}
+
+/**
+ * @summary Get production integration credentials status
+ */
+export const getIntegrationStatus = async ( options?: RequestInit): Promise<IntegrationStatus> => {
+
+  return customFetch<IntegrationStatus>(getGetIntegrationStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetIntegrationStatusQueryKey = () => {
+    return [
+    `/api/admin/integration-status`
+    ] as const;
+    }
+
+
+export const getGetIntegrationStatusQueryOptions = <TData = Awaited<ReturnType<typeof getIntegrationStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIntegrationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetIntegrationStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getIntegrationStatus>>> = ({ signal }) => getIntegrationStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getIntegrationStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetIntegrationStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getIntegrationStatus>>>
+export type GetIntegrationStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get production integration credentials status
+ */
+
+export function useGetIntegrationStatus<TData = Awaited<ReturnType<typeof getIntegrationStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getIntegrationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetIntegrationStatusQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

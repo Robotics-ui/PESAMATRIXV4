@@ -330,3 +330,34 @@ export interface AdminSettingsUpdate {
   metaApiToken?: string | null;
 }
 
+export type IntegrationStatusMetaapi = {
+  token: boolean;
+};
+
+export type IntegrationStatusMpesa = {
+  consumerKey: boolean;
+  consumerSecret: boolean;
+  passkey: boolean;
+  shortcode: boolean;
+  callbackUrl: boolean;
+};
+
+export type IntegrationStatusWebhook = {
+  secret: boolean;
+};
+
+export type IntegrationStatusMode = typeof IntegrationStatusMode[keyof typeof IntegrationStatusMode];
+
+
+export const IntegrationStatusMode = {
+  live: 'live',
+  demo: 'demo',
+} as const;
+
+export interface IntegrationStatus {
+  metaapi: IntegrationStatusMetaapi;
+  mpesa: IntegrationStatusMpesa;
+  webhook: IntegrationStatusWebhook;
+  mode: IntegrationStatusMode;
+}
+

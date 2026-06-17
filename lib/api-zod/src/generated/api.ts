@@ -495,6 +495,27 @@ export const ListAdminPaymentsResponse = zod.array(ListAdminPaymentsResponseItem
 
 
 /**
+ * @summary Get production integration credentials status
+ */
+export const GetIntegrationStatusResponse = zod.object({
+  "metaapi": zod.object({
+  "token": zod.boolean()
+}),
+  "mpesa": zod.object({
+  "consumerKey": zod.boolean(),
+  "consumerSecret": zod.boolean(),
+  "passkey": zod.boolean(),
+  "shortcode": zod.boolean(),
+  "callbackUrl": zod.boolean()
+}),
+  "webhook": zod.object({
+  "secret": zod.boolean()
+}),
+  "mode": zod.enum(['live', 'demo'])
+})
+
+
+/**
  * @summary Get platform settings
  */
 export const GetAdminSettingsResponse = zod.object({

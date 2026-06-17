@@ -616,6 +616,19 @@ paths:
                 items:
                   $ref: "#/components/schemas/Payment"
 
+  /admin/integration-status:
+    get:
+      operationId: getIntegrationStatus
+      tags: [admin]
+      summary: Get production integration credentials status
+      responses:
+        "200":
+          description: Integration status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IntegrationStatus"
+
   /admin/settings:
     get:
       operationId: getAdminSettings
@@ -1096,3 +1109,37 @@ components:
         metaApiToken:
           type: string
           nullable: true
+
+    IntegrationStatus:
+      type: object
+      required: [metaapi, mpesa, webhook, mode]
+      properties:
+        metaapi:
+          type: object
+          required: [token]
+          properties:
+            token:
+              type: boolean
+        mpesa:
+          type: object
+          required: [consumerKey, consumerSecret, passkey, shortcode, callbackUrl]
+          properties:
+            consumerKey:
+              type: boolean
+            consumerSecret:
+              type: boolean
+            passkey:
+              type: boolean
+            shortcode:
+              type: boolean
+            callbackUrl:
+              type: boolean
+        webhook:
+          type: object
+          required: [secret]
+          properties:
+            secret:
+              type: boolean
+        mode:
+          type: string
+          enum: [live, demo]

@@ -7,6 +7,7 @@ import {
   useGetAdminSettings,
   useUpdateAdminSettings,
   useListAdminUsers,
+  useGetIntegrationStatus,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,10 +15,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Eye, EyeOff, Webhook, Copy, Check } from "lucide-react";
+import { Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle, CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetAdminSettingsQueryKey } from "@workspace/api-client-react";
 import { useEffect } from "react";
+
+function StatusRow({ label, ok, optional = false }: { label: string; ok: boolean; optional?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs font-mono text-muted-foreground truncate">{label}</span>
+      {ok ? (
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-400" />
+      ) : optional ? (
+        <XCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+      ) : (
+        <XCircle className="h-3.5 w-3.5 shrink-0 text-red-400" />
+      )}
+    </div>
+  );
+}
 
 function WebhookUrlDisplay() {
   const [copied, setCopied] = useState(false);
@@ -72,6 +88,7 @@ export default function AdminPage() {
   const { data: stats, isLoading: statsLoading } = useGetAdminStats();
   const { data: settings } = useGetAdminSettings();
   const { data: adminUsers, isLoading: usersLoading } = useListAdminUsers();
+  const { data: integrationStatus, isLoading: statusLoading } = useGetIntegrationStatus();
   const [dailyFee, setDailyFee] = useState("");
   const [minDays, setMinDays] = useState("");
   const [maxDays, setMaxDays] = useState("");
@@ -233,7 +250,65 @@ export default function AdminPage() {
           </TabsContent>
 
           {/* Settings tab */}
-          <TabsContent value="settings">
+          <TabsContent value="settings" className="space-y-4">
+            {/* Integration Status Card */}
+            <Card className="border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-blue-400" />
+                  Production Integration Status
+                </CardTitle>
+                <CardDescription>Live status of required environment secrets</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {statusLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <RefreshCw className="h-4 w-4 animate-spin" /> Checking...
+                  </div>
+                ) : integrationStatus ? (
+                  <div className="space-y-4">
+                    {/* Overall mode badge */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Payment mode:</span>
+                      {integrationStatus.mode === "live" ? (
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Live</Badge>
+                      ) : (
+                        <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Demo</Badge>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* MetaApi */}
+                      <div className="rounded-lg border border-border p-3 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">MetaApi</p>
+                        <StatusRow label="METAAPI_TOKEN" ok={integrationStatus.metaapi.token} />
+                      </div>
+
+                      {/* M-Pesa */}
+                      <div className="rounded-lg border border-border p-3 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">M-Pesa</p>
+                        <StatusRow label="CONSUMER_KEY" ok={integrationStatus.mpesa.consumerKey} />
+                        <StatusRow label="CONSUMER_SECRET" ok={integrationStatus.mpesa.consumerSecret} />
+                        <StatusRow label="PASSKEY" ok={integrationStatus.mpesa.passkey} />
+                        <StatusRow label="SHORTCODE" ok={integrationStatus.mpesa.shortcode} />
+                        <StatusRow label="CALLBACK_URL" ok={integrationStatus.mpesa.callbackUrl} />
+                      </div>
+
+                      {/* Webhook */}
+                      <div className="rounded-lg border border-border p-3 space-y-2">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Webhook</p>
+                        <StatusRow label="WEBHOOK_SECRET" ok={integrationStatus.webhook.secret} optional />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground">
+                      Add missing secrets in the Replit Secrets tab and restart the API server to activate them.
+                    </p>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
             <Card className="border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
