@@ -27,6 +27,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import AboutPage from "@/pages/about";
 import ContactsPage from "@/pages/contacts";
+import LandingPage from "@/pages/landing";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,7 +48,7 @@ function GuestRoute({ component: Component }: { component: React.ComponentType }
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={() => <Redirect to="/dashboard" />} />
+      <Route path="/" component={() => <GuestRoute component={LandingPage} />} />
       <Route path="/login" component={() => <GuestRoute component={LoginPage} />} />
       <Route path="/register" component={() => <GuestRoute component={RegisterPage} />} />
       <Route path="/dashboard" component={DashboardPage} />
