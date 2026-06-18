@@ -199,4 +199,116 @@ router.patch("/forex/banner-settings", authenticate, requireAdmin, async (req, r
   }
 });
 
+
+// ADR in pip-units (used to simulate daily high/low)
+const ADR: Record<string, number> = {
+  "EUR/USD": 0.0080, "GBP/USD": 0.0100, "USD/JPY": 0.80,
+  "USD/CHF": 0.0080, "AUD/USD": 0.0080, "NZD/USD": 0.0080,
+  "USD/CAD": 0.0080, "EUR/GBP": 0.0060, "EUR/JPY": 1.00, "GBP/JPY": 1.50,
+};
+
+// Deterministic pseudo-random per pair+day so ranges don't jump on every request
+function dateHash(pair: string): number {
+  const today = new Date().toISOString().split("T")[0] ?? "";
+  const str = today + pair;
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return (Math.abs(h) % 1000) / 1000;
+}
+
+function buildMarketPulseRates(
+  baseRates: Record<string, number>,
+  prevRates: Record<string, number> | null
+) {
+  const pairs = Object.keys(PAIR_CONFIG);
+  return pairs.map((pair) => {
+    const config = PAIR_CONFIG[pair]!;
+    const baseMid = computePairMid(pair, baseRates);
+    const mid = baseMid;
+
+    const spreadValue = config.spreadPips * config.pipSize;
+    const bid = mid - spreadValue / 2;
+    const ask = mid + spreadValue / 2;
+
+    let changePercent: number;
+    let change: number;
+    if (prevRates) {
+      const prevMid = computePairMid(pair, prevRates);
+      change = mid - prevMid;
+      changePercent = (change / prevMid) * 100;
+    } else {
+      changePercent = (dateHash(pair + "pct") - 0.48) * 0.5;
+      change = baseMid * (changePercent / 100);
+    }
+
+    const direction =
+      changePercent > 0.001 ? "up" : changePercent < -0.001 ? "down" : "neutral";
+
+    const dailyOpen = mid - change;
+    const adr = ADR[pair] ?? 0.008;
+    const h = dateHash(pair);
+    const h2 = dateHash(pair + "2");
+    const sessionHigh = Math.max(dailyOpen, mid) + adr * h * 0.6;
+    const sessionLow  = Math.min(dailyOpen, mid) - adr * h2 * 0.6;
+    const rangePosition = sessionHigh > sessionLow
+      ? Math.round(((mid - sessionLow) / (sessionHigh - sessionLow)) * 100)
+      : 50;
+
+    return {
+      pair,
+      bid:          parseFloat(bid.toFixed(config.precision)),
+      ask:          parseFloat(ask.toFixed(config.precision)),
+      spread:       parseFloat(spreadValue.toFixed(config.precision + 1)),
+      midPrice:     parseFloat(mid.toFixed(config.precision)),
+      change:       parseFloat(change.toFixed(config.precision)),
+      changePercent: parseFloat(changePercent.toFixed(4)),
+      direction,
+      dailyOpen:    parseFloat(dailyOpen.toFixed(config.precision)),
+      dailyHigh:    parseFloat(sessionHigh.toFixed(config.precision)),
+      dailyLow:     parseFloat(sessionLow.toFixed(config.precision)),
+      rangePosition,
+    };
+  });
+}
+
+router.get("/forex/market-pulse", async (_req, res): Promise<void> => {
+  try {
+    const now = Date.now();
+    if (!ratesCache || now - ratesCache.fetchedAt > CACHE_TTL_MS) {
+      const previousRates = ratesCache?.baseRates ?? null;
+      const baseRates = await fetchBaseRates();
+      ratesCache = { baseRates, previousRates, fetchedAt: now };
+    }
+
+    const rates = buildMarketPulseRates(ratesCache.baseRates, ratesCache.previousRates);
+    const bullish = rates.filter((r) => r.direction === "up").length;
+    const bearish = rates.filter((r) => r.direction === "down").length;
+    const neutral = rates.filter((r) => r.direction === "neutral").length;
+    const total = rates.length;
+    const avgChangePercent = rates.reduce((s, r) => s + r.changePercent, 0) / total;
+    const score = Math.round(((bullish - bearish) / total) * 100);
+
+    res.json({
+      rates,
+      marketStatus: getMarketStatus(),
+      cachedAt: new Date(ratesCache.fetchedAt).toISOString(),
+      sentiment: { bullish, bearish, neutral, score: parseFloat(avgChangePercent.toFixed(4)), sentimentScore: score },
+    });
+  } catch (err) {
+    logger.error({ err }, "Failed to fetch market pulse");
+    if (ratesCache) {
+      const rates = buildMarketPulseRates(ratesCache.baseRates, null);
+      res.json({
+        rates,
+        marketStatus: getMarketStatus(),
+        cachedAt: new Date(ratesCache.fetchedAt).toISOString(),
+        isStale: true,
+        sentiment: { bullish: 0, bearish: 0, neutral: rates.length, score: 0, sentimentScore: 0 },
+      });
+      return;
+    }
+    res.status(503).json({ error: "Market data temporarily unavailable" });
+  }
+});
+
 export default router;

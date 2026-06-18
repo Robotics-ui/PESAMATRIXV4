@@ -783,6 +783,38 @@ export const GetForexRatesResponse = zod.object({
 
 
 /**
+ * @summary Get extended market pulse data with daily ranges and sentiment
+ */
+export const GetMarketPulseResponse = zod.object({
+  "rates": zod.array(zod.object({
+  "pair": zod.string(),
+  "bid": zod.number(),
+  "ask": zod.number(),
+  "spread": zod.number(),
+  "midPrice": zod.number(),
+  "change": zod.number(),
+  "changePercent": zod.number(),
+  "direction": zod.enum(['up', 'down', 'neutral'])
+}).and(zod.object({
+  "dailyOpen": zod.number(),
+  "dailyHigh": zod.number(),
+  "dailyLow": zod.number(),
+  "rangePosition": zod.number().describe('0-100 position of current price within today\'s high-low range')
+}))),
+  "marketStatus": zod.enum(['OPEN', 'CLOSED', 'OPENING_SOON']),
+  "cachedAt": zod.coerce.date(),
+  "isStale": zod.boolean().optional(),
+  "sentiment": zod.object({
+  "bullish": zod.number(),
+  "bearish": zod.number(),
+  "neutral": zod.number(),
+  "score": zod.number().describe('Average change percent across all pairs'),
+  "sentimentScore": zod.number().describe('-100 (full bearish) to +100 (full bullish)')
+})
+})
+
+
+/**
  * @summary Get market banner display settings
  */
 export const GetBannerSettingsResponse = zod.object({

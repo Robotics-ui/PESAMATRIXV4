@@ -900,6 +900,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /forex/market-pulse:
+    get:
+      operationId: getMarketPulse
+      tags: [forex]
+      summary: Get extended market pulse data with daily ranges and sentiment
+      responses:
+        "200":
+          description: Market pulse with daily ranges and sentiment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketPulseResponse"
+        "503":
+          description: Market data unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /forex/banner-settings:
     get:
       operationId: getBannerSettings
@@ -1558,6 +1577,58 @@ components:
           format: date-time
         isStale:
           type: boolean
+
+    MarketPulseRate:
+      allOf:
+        - $ref: "#/components/schemas/ForexRate"
+        - type: object
+          required: [dailyOpen, dailyHigh, dailyLow, rangePosition]
+          properties:
+            dailyOpen:
+              type: number
+            dailyHigh:
+              type: number
+            dailyLow:
+              type: number
+            rangePosition:
+              type: integer
+              description: 0-100 position of current price within today's high-low range
+
+    MarketSentiment:
+      type: object
+      required: [bullish, bearish, neutral, score, sentimentScore]
+      properties:
+        bullish:
+          type: integer
+        bearish:
+          type: integer
+        neutral:
+          type: integer
+        score:
+          type: number
+          description: Average change percent across all pairs
+        sentimentScore:
+          type: integer
+          description: -100 (full bearish) to +100 (full bullish)
+
+    MarketPulseResponse:
+      type: object
+      required: [rates, marketStatus, cachedAt, sentiment]
+      properties:
+        rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketPulseRate"
+        marketStatus:
+          type: string
+          enum: [OPEN, CLOSED, OPENING_SOON]
+        cachedAt:
+          type: string
+          format: date-time
+        isStale:
+          type: boolean
+        sentiment:
+          $ref: "#/components/schemas/MarketSentiment"
 
     BannerSettings:
       type: object

@@ -454,6 +454,41 @@ export interface ForexRatesResponse {
   isStale?: boolean;
 }
 
+export type MarketPulseRate = ForexRate & {
+  dailyOpen: number;
+  dailyHigh: number;
+  dailyLow: number;
+  /** 0-100 position of current price within today's high-low range */
+  rangePosition: number;
+};
+
+export interface MarketSentiment {
+  bullish: number;
+  bearish: number;
+  neutral: number;
+  /** Average change percent across all pairs */
+  score: number;
+  /** -100 (full bearish) to +100 (full bullish) */
+  sentimentScore: number;
+}
+
+export type MarketPulseResponseMarketStatus = typeof MarketPulseResponseMarketStatus[keyof typeof MarketPulseResponseMarketStatus];
+
+
+export const MarketPulseResponseMarketStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+  OPENING_SOON: 'OPENING_SOON',
+} as const;
+
+export interface MarketPulseResponse {
+  rates: MarketPulseRate[];
+  marketStatus: MarketPulseResponseMarketStatus;
+  cachedAt: string;
+  isStale?: boolean;
+  sentiment: MarketSentiment;
+}
+
 export type BannerSettingsDisplayMode = typeof BannerSettingsDisplayMode[keyof typeof BannerSettingsDisplayMode];
 
 
