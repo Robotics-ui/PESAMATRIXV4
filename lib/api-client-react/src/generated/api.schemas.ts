@@ -63,7 +63,15 @@ export interface User {
 
 export interface AuthResponse {
   token: string;
+  mustChangePassword?: boolean;
   user: User;
+}
+
+export interface ChangePasswordInput {
+  /** @minLength 1 */
+  currentPassword: string;
+  /** @minLength 8 */
+  newPassword: string;
 }
 
 export interface UserUpdate {

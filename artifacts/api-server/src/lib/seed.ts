@@ -22,7 +22,7 @@ export async function seedDefaultAccounts(): Promise<void> {
     const adminHash = await hashPassword("Admin@2024!");
     const [admin] = await db
       .insert(usersTable)
-      .values({ name: "Admin", email: "admin@pesamatrix.com", phone: "254700000000", role: "admin", status: "active", passwordHash: adminHash })
+      .values({ name: "Admin", email: "admin@pesamatrix.com", phone: "254700000000", role: "admin", status: "active", passwordHash: adminHash, mustChangePassword: true })
       .returning();
 
     await db.insert(subscriptionsTable).values({ userId: admin.id, status: "expired", daysPaid: 0 });

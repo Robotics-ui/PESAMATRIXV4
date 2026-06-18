@@ -21,6 +21,7 @@ import AdminMediaCenterPage from "@/pages/admin/media-center";
 import AdminNewsPage from "@/pages/admin/news-admin";
 import AdminResourcesPage from "@/pages/admin/resources-admin";
 import AdminAnnouncementsPage from "@/pages/admin/announcements-admin";
+import ChangePasswordPage from "@/pages/change-password";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/admin/news" component={AdminNewsPage} />
       <Route path="/admin/resources" component={AdminResourcesPage} />
       <Route path="/admin/announcements" component={AdminAnnouncementsPage} />
+      <Route path="/change-password" component={ChangePasswordPage} />
       <Route component={NotFound} />
     </Switch>
   );

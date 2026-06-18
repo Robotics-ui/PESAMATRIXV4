@@ -44,6 +44,7 @@ export const LoginBody = zod.object({
 
 export const LoginResponse = zod.object({
   "token": zod.string(),
+  "mustChangePassword": zod.boolean().optional(),
   "user": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -72,6 +73,24 @@ export const ForgotPasswordBody = zod.object({
 })
 
 export const ForgotPasswordResponse = zod.object({
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Change password (required after first admin login)
+ */
+
+export const changePasswordBodyNewPasswordMin = 8;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string().min(1),
+  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin)
+})
+
+export const ChangePasswordResponse = zod.object({
   "message": zod.string()
 })
 

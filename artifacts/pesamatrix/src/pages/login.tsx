@@ -19,7 +19,11 @@ export default function LoginPage() {
     mutation: {
       onSuccess: (data) => {
         login(data.token);
-        navigate("/dashboard");
+        if (data.mustChangePassword) {
+          navigate("/change-password");
+        } else {
+          navigate("/dashboard");
+        }
       },
       onError: (err: unknown) => {
         const e = err as { data?: { error?: string } };

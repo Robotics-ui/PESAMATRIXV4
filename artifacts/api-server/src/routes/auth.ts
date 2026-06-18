@@ -25,12 +25,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const passwordHash = await hashPassword(password);
   const [user] = await db.insert(usersTable).values({ name, email, phone, passwordHash }).returning();
 
-  // Create initial (expired) subscription record
   await db.insert(subscriptionsTable).values({ userId: user.id, status: "expired", daysPaid: 0 });
 
   const token = signToken(user.id, user.role);
   res.status(201).json({
     token,
+    mustChangePassword: user.mustChangePassword,
     user: {
       id: user.id,
       name: user.name,
@@ -66,6 +66,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const token = signToken(user.id, user.role);
   res.json({
     token,
+    mustChangePassword: user.mustChangePassword,
     user: {
       id: user.id,
       name: user.name,
@@ -88,9 +89,46 @@ router.post("/auth/forgot-password", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  // In production: send email with reset link
-  // For now, return a success message to avoid leaking user existence
   res.json({ message: "If an account exists with that email, a reset link has been sent." });
+});
+
+router.patch("/auth/change-password", authenticate, async (req, res): Promise<void> => {
+  const { currentPassword, newPassword } = req.body as { currentPassword?: string; newPassword?: string };
+
+  if (!currentPassword || typeof currentPassword !== "string") {
+    res.status(400).json({ error: "Current password is required" });
+    return;
+  }
+  if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+    res.status(400).json({ error: "New password must be at least 8 characters" });
+    return;
+  }
+
+  const userId = req.userId!;
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+
+  if (!user) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  if (!(await verifyPassword(currentPassword, user.passwordHash))) {
+    res.status(400).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: "New password must be different from the current password" });
+    return;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await db
+    .update(usersTable)
+    .set({ passwordHash, mustChangePassword: false })
+    .where(eq(usersTable.id, userId));
+
+  res.json({ message: "Password changed successfully" });
 });
 
 export default router;
