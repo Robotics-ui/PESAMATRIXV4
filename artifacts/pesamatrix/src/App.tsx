@@ -23,6 +23,8 @@ import AdminResourcesPage from "@/pages/admin/resources-admin";
 import AdminAnnouncementsPage from "@/pages/admin/announcements-admin";
 import ChangePasswordPage from "@/pages/change-password";
 import MarketPulsePage from "@/pages/market-pulse";
+import ForgotPasswordPage from "@/pages/forgot-password";
+import ResetPasswordPage from "@/pages/reset-password";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +65,8 @@ function Router() {
       <Route path="/admin/announcements" component={AdminAnnouncementsPage} />
       <Route path="/change-password" component={ChangePasswordPage} />
       <Route path="/market" component={MarketPulsePage} />
+      <Route path="/forgot-password" component={() => <GuestRoute component={ForgotPasswordPage} />} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
       <Route component={NotFound} />
     </Switch>
   );

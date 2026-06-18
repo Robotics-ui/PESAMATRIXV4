@@ -20,6 +20,7 @@ import {
   getGetBannerSettingsQueryKey,
   useGetForexRates,
   getGetForexRatesQueryKey,
+  useAdminGenerateResetLink,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle,
   CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity,
-  Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown, Radio,
+  Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown, Radio, KeyRound,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -1158,6 +1159,24 @@ export default function AdminPage() {
   const [metaApiToken, setMetaApiToken] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [resetLinkData, setResetLinkData] = useState<{ email: string; link: string } | null>(null);
+  const [resetLinkCopied, setResetLinkCopied] = useState(false);
+
+  const { mutate: generateResetLink, isPending: generatingReset } = useAdminGenerateResetLink({
+    mutation: {
+      onSuccess: (data, variables) => {
+        const email = adminUsers?.find((u) => u.id === variables.id)?.email ?? "";
+        setResetLinkData({ email, link: data.resetLink ?? "" });
+      },
+    },
+  });
+
+  const copyResetLink = () => {
+    if (!resetLinkData) return;
+    void navigator.clipboard.writeText(resetLinkData.link);
+    setResetLinkCopied(true);
+    setTimeout(() => setResetLinkCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (settings) {
@@ -1298,7 +1317,8 @@ export default function AdminPage() {
                           <th className="text-left py-2 pr-4">Role</th>
                           <th className="text-left py-2 pr-4">Status</th>
                           <th className="text-left py-2 pr-4">Subscription</th>
-                          <th className="text-right py-2">Joined</th>
+                          <th className="text-left py-2 pr-4">Joined</th>
+                          <th className="text-right py-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1318,8 +1338,21 @@ export default function AdminPage() {
                             <td className="py-3 pr-4">
                               <Badge className={subBadge(u.subscriptionStatus ?? undefined)}>{u.subscriptionStatus ?? "none"}</Badge>
                             </td>
-                            <td className="py-3 text-right text-xs text-muted-foreground">
+                            <td className="py-3 pr-4 text-xs text-muted-foreground">
                               {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}
+                            </td>
+                            <td className="py-3 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs gap-1.5 border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+                                disabled={generatingReset}
+                                onClick={() => generateResetLink({ id: u.id })}
+                                title="Generate password reset link"
+                              >
+                                <KeyRound className="h-3 w-3" />
+                                Reset Link
+                              </Button>
                             </td>
                           </tr>
                         ))}
@@ -1481,6 +1514,51 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Reset Link Dialog */}
+      <Dialog open={!!resetLinkData} onOpenChange={(open) => { if (!open) { setResetLinkData(null); setResetLinkCopied(false); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-blue-400" />
+              Password Reset Link
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {resetLinkData?.email && (
+              <p className="text-sm text-muted-foreground">
+                Reset link for <span className="text-foreground font-medium">{resetLinkData.email}</span>
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono text-muted-foreground break-all">
+                {resetLinkData?.link}
+              </div>
+              <Button size="sm" variant="outline" className="shrink-0" onClick={copyResetLink}>
+                {resetLinkCopied ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-amber-400/80">
+              <Clock className="h-3.5 w-3.5" />
+              This link expires in 1 hour and can only be used once.
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Share this link with the user via WhatsApp, SMS, or email so they can set a new password.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setResetLinkData(null); setResetLinkCopied(false); }}>
+              Close
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => { if (resetLinkData) window.open(resetLinkData.link, "_blank"); }}
+            >
+              Open Link
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { eq, sum, count } from "drizzle-orm";
-import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable } from "@workspace/db";
+import crypto from "crypto";
+import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { invalidateMetaApiTokenCache } from "../lib/metaapi";
@@ -350,6 +351,34 @@ router.get("/admin/integration-status", authenticate, requireAdmin, async (_req,
     mpesa: { consumerKey, consumerSecret, passkey, shortcode, callbackUrl },
     webhook: { secret: webhookSecret },
     mode: mpesaLive ? "live" : "demo",
+  });
+});
+
+router.post("/admin/users/:id/generate-reset-link", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const userId = parseInt(req.params.id);
+  if (isNaN(userId)) {
+    res.status(400).json({ error: "Invalid user ID" });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await db.insert(passwordResetTokensTable).values({ userId: user.id, token, expiresAt });
+
+  const host = req.get("x-forwarded-host") ?? req.get("host") ?? "localhost:5000";
+  const proto = req.get("x-forwarded-proto") ?? req.protocol ?? "http";
+  const baseUrl = process.env.APP_URL ?? `${proto}://${host}`;
+  const resetLink = `${baseUrl}/reset-password?token=${token}`;
+
+  res.json({
+    message: `Reset link generated for ${user.email}. It expires in 1 hour.`,
+    resetLink,
   });
 });
 

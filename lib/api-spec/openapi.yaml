@@ -118,7 +118,7 @@ paths:
     post:
       operationId: forgotPassword
       tags: [auth]
-      summary: Send password reset email
+      summary: Generate a password reset link
       requestBody:
         required: true
         content:
@@ -127,11 +127,36 @@ paths:
               $ref: "#/components/schemas/ForgotPasswordInput"
       responses:
         "200":
-          description: Reset email sent
+          description: Reset link generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForgotPasswordResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset password using a valid token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/change-password:
     patch:
@@ -796,6 +821,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminUser"
 
+  /admin/users/{id}/generate-reset-link:
+    post:
+      operationId: adminGenerateResetLink
+      tags: [admin]
+      summary: Generate a password reset link for any user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reset link generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForgotPasswordResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/payments:
     get:
       operationId: listAdminPayments
@@ -1017,6 +1067,25 @@ components:
       properties:
         email:
           type: string
+
+    ForgotPasswordResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        resetLink:
+          type: string
+
+    ResetPasswordInput:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+        newPassword:
+          type: string
+          minLength: 8
 
     AuthResponse:
       type: object

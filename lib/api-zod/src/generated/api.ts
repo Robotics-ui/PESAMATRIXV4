@@ -66,13 +66,31 @@ export const LogoutResponse = zod.object({
 
 
 /**
- * @summary Send password reset email
+ * @summary Generate a password reset link
  */
 export const ForgotPasswordBody = zod.object({
   "email": zod.string()
 })
 
 export const ForgotPasswordResponse = zod.object({
+  "message": zod.string(),
+  "resetLink": zod.string().optional()
+})
+
+
+/**
+ * @summary Reset password using a valid token
+ */
+export const resetPasswordBodyNewPasswordMin = 8;
+
+
+
+export const ResetPasswordBody = zod.object({
+  "token": zod.string(),
+  "newPassword": zod.string().min(resetPasswordBodyNewPasswordMin)
+})
+
+export const ResetPasswordResponse = zod.object({
   "message": zod.string()
 })
 
@@ -636,6 +654,19 @@ export const ActivateUserResponse = zod.object({
   "subscriptionStatus": zod.string().nullish(),
   "remainingDays": zod.number().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Generate a password reset link for any user
+ */
+export const AdminGenerateResetLinkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdminGenerateResetLinkResponse = zod.object({
+  "message": zod.string(),
+  "resetLink": zod.string().optional()
 })
 
 

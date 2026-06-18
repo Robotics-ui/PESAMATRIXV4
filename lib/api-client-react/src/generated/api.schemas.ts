@@ -35,6 +35,17 @@ export interface ForgotPasswordInput {
   email: string;
 }
 
+export interface ForgotPasswordResponse {
+  message: string;
+  resetLink?: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  /** @minLength 8 */
+  newPassword: string;
+}
+
 export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 
