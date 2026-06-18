@@ -1,0 +1,62 @@
+Please debug the M-Pesa STK Push issue in production. The STK Push is failing immediately, so DO NOT change any business logic yet. First identify the exact cause from logs, then fix only after confirming the root issue.
+STEP 1: ADD FULL DEBUG LOGGING (NO LOGIC CHANGES YET)
+Before making any fixes, enhance logging to capture the full Safaricom response and request details.
+Add the following logs:
+Log full STK request payload BEFORE sending request:
+BusinessShortCode
+Password
+Timestamp
+Amount
+PhoneNumber
+CallBackURL
+Log full STK response AFTER request:
+TypeScript
+logger.error({
+  stkData,
+  httpStatus: stkResponse.status,
+}, "FULL STK FAILURE RESPONSE");
+Also log OAuth response:
+access_token response from Safaricom
+DO NOT modify any logic or flows yet. Only add logging.
+STEP 2: VERIFY ENVIRONMENT VARIABLES (DO NOT CHANGE)
+Check and confirm these are set in production:
+MPESA_CONSUMER_KEY
+MPESA_CONSUMER_SECRET
+MPESA_PASSKEY
+MPESA_SHORTCODE
+MPESA_CALLBACK_URL
+Log MPESA_CALLBACK_URL value at runtime to confirm it is:
+https://pesamatrixv-4--fxkeld.replit.app/api/payments/callback⁠�
+STEP 3: VERIFY REQUEST FLOW (NO CHANGES)
+Confirm the STK Push flow is:
+Get OAuth token
+Generate timestamp
+Generate password
+Send STK request
+Receive CheckoutRequestID
+Log each step result clearly.
+STEP 4: CHECK COMMON FAILURE REASONS (DO NOT FIX YET)
+After logging, check for these possible issues:
+Invalid consumer key/secret
+Wrong shortcode or passkey mismatch
+Timestamp format rejected by Safaricom
+Invalid phone number format (must be 2547XXXXXXXX)
+Callback URL not accessible publicly
+Production vs sandbox mismatch
+DO NOT apply fixes until logs confirm which issue is happening.
+STEP 5: CALLBACK ROUTE VERIFICATION (ONLY CHECK)
+Confirm this route exists and is registered:
+POST /api/payments/callback
+It must:
+Accept Safaricom JSON payload
+Return HTTP 200 immediately
+Log incoming request body
+Do NOT modify callback logic yet.
+FINAL REQUIREMENT
+Once logs reveal the exact Safaricom error (stkData.errorMessage or errorCode), THEN:
+Identify root cause
+Apply minimal fix only
+Ensure STK Push returns CheckoutRequestID successfully
+Ensure callback updates payment status correctly
+END
+Do not guess the issue. Only fix after confirming from logs.

@@ -64,11 +64,37 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
   const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
   const passkey = process.env.MPESA_PASSKEY;
   const shortcode = process.env.MPESA_SHORTCODE;
-  const callbackUrl = process.env.MPESA_CALLBACK_URL;
+  // Build callback URL: prefer explicit env var, fall back to REPLIT_DOMAINS
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  const firstDomain = replitDomains ? replitDomains.split(",")[0].trim() : null;
+  const callbackUrl =
+    process.env.MPESA_CALLBACK_URL ||
+    (firstDomain ? `https://${firstDomain}/api/payments/callback` : undefined);
 
-  if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
+  // Log callback URL at runtime so it can be verified in logs
+  logger.info(
+    {
+      MPESA_CALLBACK_URL: callbackUrl ?? "NOT_SET",
+      REPLIT_DOMAINS: replitDomains ?? "NOT_SET",
+      source: process.env.MPESA_CALLBACK_URL ? "env_var" : firstDomain ? "replit_domains" : "missing",
+    },
+    "MPESA env check"
+  );
+
+  if (!consumerKey || !consumerSecret || !passkey || !shortcode || !callbackUrl) {
     // Demo mode: simulate payment completion
-    logger.warn("MPESA credentials not configured, using demo mode");
+    logger.warn(
+      {
+        missingVars: {
+          consumerKey: !consumerKey,
+          consumerSecret: !consumerSecret,
+          passkey: !passkey,
+          shortcode: !shortcode,
+          callbackUrl: !callbackUrl,
+        },
+      },
+      "MPESA credentials not configured, using demo mode"
+    );
 
     const [payment] = await db
       .insert(paymentsTable)
@@ -95,7 +121,7 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
   }
 
   try {
-    // Get M-Pesa access token
+    // STEP 1: Get M-Pesa access token + log OAuth response
     const authResponse = await fetch(
       "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
       {
@@ -104,8 +130,22 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
         },
       }
     );
-    const authData = (await authResponse.json()) as { access_token: string };
+    const authData = (await authResponse.json()) as { access_token?: string; error?: string; error_description?: string };
+    logger.info(
+      {
+        oauthHttpStatus: authResponse.status,
+        hasAccessToken: !!authData.access_token,
+        oauthError: authData.error ?? null,
+        oauthErrorDescription: authData.error_description ?? null,
+      },
+      "MPESA OAuth response"
+    );
     const accessToken = authData.access_token;
+    if (!accessToken) {
+      logger.error({ authData, httpStatus: authResponse.status }, "MPESA OAuth token fetch failed");
+      res.status(500).json({ error: "Failed to obtain M-Pesa access token" });
+      return;
+    }
 
     const timestamp = new Date()
       .toISOString()
@@ -113,25 +153,39 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
       .slice(0, 14);
     const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
 
+    // STEP 2: Log full STK request payload BEFORE sending
+    const stkPayload = {
+      BusinessShortCode: shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      TransactionType: "CustomerPayBillOnline",
+      Amount: Math.ceil(amount),
+      PartyA: normalizedPhone,
+      PartyB: shortcode,
+      PhoneNumber: normalizedPhone,
+      CallBackURL: callbackUrl ?? "NOT_SET",
+      AccountReference: "PESAMATRIX",
+      TransactionDesc: `${days} trading day(s) subscription`,
+    };
+    logger.info(
+      {
+        BusinessShortCode: stkPayload.BusinessShortCode,
+        Timestamp: stkPayload.Timestamp,
+        Amount: stkPayload.Amount,
+        PhoneNumber: stkPayload.PhoneNumber,
+        CallBackURL: stkPayload.CallBackURL,
+        callbackUrlSet: !!callbackUrl,
+      },
+      "STK Push request payload"
+    );
+
     const stkResponse = await fetch("https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        BusinessShortCode: shortcode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: "CustomerPayBillOnline",
-        Amount: Math.ceil(amount),
-        PartyA: normalizedPhone,
-        PartyB: shortcode,
-        PhoneNumber: normalizedPhone,
-        CallBackURL: callbackUrl,
-        AccountReference: "PESAMATRIX",
-        TransactionDesc: `${days} trading day(s) subscription`,
-      }),
+      body: JSON.stringify(stkPayload),
     });
 
     const stkData = (await stkResponse.json()) as {
@@ -143,7 +197,15 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
       requestId?: string;
     };
 
+    // STEP 3: Log full STK response
     if (!stkData.CheckoutRequestID) {
+      logger.error(
+        {
+          stkData,
+          httpStatus: stkResponse.status,
+        },
+        "FULL STK FAILURE RESPONSE"
+      );
       logger.error(
         {
           errorCode: stkData.errorCode,
@@ -159,6 +221,15 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
       res.status(400).json({ error: detail, code: stkData.errorCode ?? stkData.ResponseCode });
       return;
     }
+
+    logger.info(
+      {
+        CheckoutRequestID: stkData.CheckoutRequestID,
+        ResponseCode: stkData.ResponseCode,
+        ResponseDescription: stkData.ResponseDescription,
+      },
+      "STK Push accepted by Safaricom"
+    );
 
     const [payment] = await db
       .insert(paymentsTable)
@@ -204,12 +275,23 @@ router.get("/payments/:checkoutRequestId/status", authenticate, async (req, res)
 });
 
 router.post("/payments/callback", async (req, res): Promise<void> => {
+  // Step 5: Log incoming Safaricom callback immediately
+  logger.info({ rawBody: req.body }, "MPESA callback received");
   try {
     const body = req.body?.Body?.stkCallback;
     if (!body) {
+      logger.warn({ rawBody: req.body }, "MPESA callback missing Body.stkCallback");
       res.json({ message: "OK" });
       return;
     }
+    logger.info(
+      {
+        CheckoutRequestID: body.CheckoutRequestID,
+        ResultCode: body.ResultCode,
+        ResultDesc: body.ResultDesc,
+      },
+      "MPESA callback stkCallback"
+    );
 
     const { CheckoutRequestID, ResultCode, CallbackMetadata } = body;
 
