@@ -1,5 +1,6 @@
 import { db, adminSettingsTable, bindingsTable, strategiesTable, slaveAccountsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { logger } from "./logger";
 
 let cachedToken: string | null | undefined = undefined;
 let cacheExpiry = 0;
@@ -37,14 +38,20 @@ export function invalidateMetaApiTokenCache(): void {
  */
 export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): Promise<void> {
   const token = await getMetaApiToken();
-  if (!token) return;
+  if (!token) {
+    logger.debug({ slaveAccountId }, "MetaApi token not configured — skipping CopyFactory sync");
+    return;
+  }
 
   const [slave] = await db
     .select()
     .from(slaveAccountsTable)
     .where(eq(slaveAccountsTable.id, slaveAccountId));
 
-  if (!slave?.metaapiAccountId) return;
+  if (!slave?.metaapiAccountId) {
+    logger.debug({ slaveAccountId }, "Slave account has no MetaApi account ID — skipping CopyFactory sync");
+    return;
+  }
 
   const activeBindings = await db
     .select()
@@ -67,7 +74,7 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
   }
 
   try {
-    await fetch(
+    const response = await fetch(
       `https://copyfactory-api-v1.agiliumtrade.agiliumtrade.ai/users/current/configuration/subscribers/${slave.metaapiAccountId}`,
       {
         method: "PUT",
@@ -78,7 +85,24 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
         body: JSON.stringify({ subscriptions }),
       }
     );
-  } catch {
-    // Non-fatal: DB is the source of truth; CopyFactory sync is best-effort
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      logger.error(
+        { slaveAccountId, metaapiAccountId: slave.metaapiAccountId, status: response.status, body },
+        "CopyFactory subscriber sync returned non-OK status"
+      );
+    } else {
+      logger.info(
+        { slaveAccountId, metaapiAccountId: slave.metaapiAccountId, subscriptionCount: subscriptions.length },
+        "CopyFactory subscriber synced successfully"
+      );
+    }
+  } catch (err) {
+    // DB is the source of truth; log but do not propagate
+    logger.error(
+      { err, slaveAccountId, metaapiAccountId: slave.metaapiAccountId },
+      "CopyFactory subscriber sync failed (network/request error)"
+    );
   }
 }

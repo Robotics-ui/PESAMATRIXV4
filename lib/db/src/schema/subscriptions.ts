@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,7 +10,11 @@ export const subscriptionsTable = pgTable("subscriptions", {
   endDate: timestamp("end_date", { withTimezone: true }),
   daysPaid: integer("days_paid").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("subscriptions_user_id_idx").on(table.userId),
+  index("subscriptions_status_idx").on(table.status),
+  index("subscriptions_end_date_idx").on(table.endDate),
+]);
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({ id: true, createdAt: true });
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;

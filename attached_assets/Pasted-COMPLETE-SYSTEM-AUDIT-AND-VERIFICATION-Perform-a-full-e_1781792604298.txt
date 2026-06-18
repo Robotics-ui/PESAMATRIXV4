@@ -1,0 +1,364 @@
+COMPLETE SYSTEM AUDIT AND VERIFICATION
+
+Perform a full end-to-end audit of the entire PesaMatrix platform and verify that every module is fully implemented, connected, functional, secure, and production-ready.
+
+Do not assume anything is working. Inspect the actual codebase, database, APIs, scheduled jobs, frontend pages, and integrations.
+
+1. AUTHENTICATION
+
+Verify:
+
+- User Registration
+- Login
+- Logout
+- Password Reset
+- JWT Authentication
+- Session Management
+- Role-Based Access Control
+
+Confirm:
+
+- Users cannot access Admin pages
+- Admin can access all Admin functions
+- Unauthorized requests are blocked
+
+Fix any issues found.
+
+---
+
+2. MPESA PAYMENTS
+
+Verify:
+
+- STK Push initiation
+- Callback URL
+- Callback processing
+- Payment recording
+- Payment verification
+- Duplicate payment protection
+- Failed payment handling
+
+Confirm:
+
+- Successful payment activates subscription
+- Failed payment does not activate subscription
+
+Fix any issues found.
+
+---
+
+3. SUBSCRIPTION SYSTEM
+
+Verify:
+
+- Daily subscription model
+- Trading day calculations
+- Monday-Friday counting only
+- Subscription expiration
+- Subscription renewal
+
+Confirm:
+
+- Remaining trading days are accurate
+- Expired subscriptions are detected correctly
+
+Fix any issues found.
+
+---
+
+4. SUBSCRIPTION ENFORCEMENT WORKER
+
+Verify:
+
+- Worker exists
+- Worker runs every 30 minutes
+- Worker scans ALL subscriptions
+- Worker logs execution
+
+Confirm:
+
+- Active subscribers remain connected
+- Expired subscribers are automatically disconnected
+- Renewed subscribers are automatically reconnected
+
+Provide evidence and logs.
+
+Fix any issues found.
+
+---
+
+5. MASTER ACCOUNT APPROVAL SYSTEM
+
+Verify:
+
+- New master accounts are created with PENDING_APPROVAL status
+- Admin approval is required
+- Rejected accounts cannot deploy
+- Approved accounts deploy correctly
+
+Confirm:
+
+- No unapproved master account can:
+  - Create strategies
+  - Receive subscribers
+  - Send copy trades
+
+Fix any issues found.
+
+---
+
+6. MASTER ACCOUNT DEPLOYMENT
+
+Verify:
+
+- MetaApi account creation
+- MetaApi deployment
+- Synchronization
+- Connection monitoring
+
+Confirm:
+
+- Statuses update correctly:
+  - PENDING_APPROVAL
+  - APPROVED
+  - DEPLOYING
+  - ACTIVE
+  - REJECTED
+  - SUSPENDED
+
+Fix any issues found.
+
+---
+
+7. STRATEGY MANAGEMENT
+
+Verify:
+
+- Strategy creation
+- Strategy updates
+- Strategy status
+- Strategy deletion
+
+Confirm:
+
+- Only ACTIVE master accounts can create strategies
+
+Fix any issues found.
+
+---
+
+8. SLAVE ACCOUNT MANAGEMENT
+
+Verify:
+
+- Slave account creation
+- Automatic MetaApi deployment
+- Automatic CopyFactory subscriber creation
+- Connection monitoring
+
+Confirm:
+
+- Slave accounts deploy automatically
+- Multiple slave accounts per user are supported
+
+Fix any issues found.
+
+---
+
+9. COPYFACTORY INTEGRATION
+
+Verify:
+
+- Subscriber creation
+- Strategy binding
+- Strategy unbinding
+- Risk multiplier functionality
+
+Confirm:
+
+- Active subscribers receive trades
+- Expired subscribers receive no trades
+
+Fix any issues found.
+
+---
+
+10. DATABASE
+
+Verify:
+
+- Prisma schema
+- Migrations
+- Relationships
+- Constraints
+- Indexes
+
+Confirm:
+
+No missing tables or columns.
+
+Fix any issues found.
+
+---
+
+11. ADMIN DASHBOARD
+
+Verify:
+
+- User Management
+- Subscription Management
+- Payment Management
+- Master Account Approvals
+- Strategies
+- Slave Accounts
+- Media Center
+- News
+- Resources
+- Announcements
+
+Confirm all pages work.
+
+Fix any issues found.
+
+---
+
+12. MEDIA CENTER
+
+Verify:
+
+- Image upload
+- Video upload
+- Video links
+- Edit
+- Delete
+- Publish
+- Unpublish
+
+Confirm uploads work from mobile devices.
+
+Fix any issues found.
+
+---
+
+13. TRADING NEWS
+
+Verify:
+
+- News creation
+- News editing
+- News deletion
+- Publishing
+
+Confirm frontend display works.
+
+Fix any issues found.
+
+---
+
+14. LEARNING RESOURCES
+
+Verify:
+
+- PDF uploads
+- Video uploads
+- Resource downloads
+- Categories
+
+Confirm all resources are accessible.
+
+Fix any issues found.
+
+---
+
+15. ANNOUNCEMENTS
+
+Verify:
+
+- Create
+- Edit
+- Delete
+- Publish
+- Priority levels
+
+Confirm dashboard notifications work.
+
+Fix any issues found.
+
+---
+
+16. NOTIFICATIONS
+
+Verify:
+
+- Payment notifications
+- Approval notifications
+- Rejection notifications
+- Subscription expiry notifications
+
+Fix any issues found.
+
+---
+
+17. SECURITY
+
+Verify:
+
+- Password hashing
+- Input validation
+- API protection
+- Authorization checks
+- Sensitive data protection
+
+Fix any issues found.
+
+---
+
+18. PERFORMANCE
+
+Verify readiness for:
+
+- 2,000 slave accounts
+- 500 concurrent users
+- Multiple strategies
+- Multiple master accounts
+
+Identify bottlenecks and fix them.
+
+---
+
+19. ERROR HANDLING
+
+Verify:
+
+- API errors
+- MetaApi failures
+- Mpesa failures
+- Database failures
+
+Confirm meaningful error messages exist.
+
+Fix any issues found.
+
+---
+
+20. FINAL REPORT
+
+After completing the audit:
+
+Provide a detailed report showing:
+
+- Working modules
+- Missing modules
+- Broken modules
+- Security issues
+- Performance issues
+- Database issues
+- Integration issues
+
+Automatically fix every issue found.
+
+Do not stop at reporting.
+
+Continue until the platform is fully operational and production-ready.
+
+Provide file names changed, database changes made, APIs verified, and test results for each module.

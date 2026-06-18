@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, bindingsTable, subscriptionsTable, slaveAccountsTable, strategiesTable } from "@workspace/db";
 import { CreateBindingBody, DeleteBindingParams } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
@@ -20,11 +20,11 @@ router.get("/bindings", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  const allBindings: typeof bindingsTable.$inferSelect[] = [];
-  for (const sid of strategyIds) {
-    const b = await db.select().from(bindingsTable).where(eq(bindingsTable.strategyId, sid));
-    allBindings.push(...b);
-  }
+  // Use inArray to fetch all bindings in a single query (avoid N+1)
+  const allBindings = await db
+    .select()
+    .from(bindingsTable)
+    .where(inArray(bindingsTable.strategyId, strategyIds));
 
   res.json(
     allBindings.map((b) => ({
@@ -102,18 +102,32 @@ router.delete("/bindings/:id", authenticate, async (req, res): Promise<void> => 
     return;
   }
 
-  // Capture slave account ID before deletion so we can sync CopyFactory after
+  // Verify ownership: the binding's strategy must belong to this user
   const [existing] = await db
-    .select()
+    .select({ id: bindingsTable.id, slaveAccountId: bindingsTable.slaveAccountId, strategyId: bindingsTable.strategyId })
     .from(bindingsTable)
     .where(eq(bindingsTable.id, params.data.id));
+
+  if (!existing) {
+    res.status(404).json({ error: "Binding not found" });
+    return;
+  }
+
+  // Confirm the strategy (and thus the binding) belongs to this user
+  const [ownerStrategy] = await db
+    .select({ id: strategiesTable.id })
+    .from(strategiesTable)
+    .where(and(eq(strategiesTable.id, existing.strategyId), eq(strategiesTable.userId, req.userId!)));
+
+  if (!ownerStrategy) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   await db.delete(bindingsTable).where(eq(bindingsTable.id, params.data.id));
 
   // Sync to CopyFactory — remaining active bindings (may be empty)
-  if (existing) {
-    await syncSlaveSubscriberToCopyFactory(existing.slaveAccountId);
-  }
+  await syncSlaveSubscriberToCopyFactory(existing.slaveAccountId);
 
   res.sendStatus(204);
 });

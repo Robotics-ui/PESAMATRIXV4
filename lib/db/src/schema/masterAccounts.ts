@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,7 +15,11 @@ export const masterAccountsTable = pgTable("master_accounts", {
   connectionStatus: text("connection_status"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("master_accounts_user_id_idx").on(table.userId),
+  index("master_accounts_status_idx").on(table.status),
+  index("master_accounts_metaapi_account_id_idx").on(table.metaapiAccountId),
+]);
 
 export const insertMasterAccountSchema = createInsertSchema(masterAccountsTable).omit({ id: true, createdAt: true });
 export type InsertMasterAccount = z.infer<typeof insertMasterAccountSchema>;

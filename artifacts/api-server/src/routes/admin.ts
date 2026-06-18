@@ -23,14 +23,19 @@ router.get("/admin/stats", authenticate, requireAdmin, async (_req, res): Promis
   const [slaveCountResult] = await db.select({ count: count() }).from(slaveAccountsTable);
   const [strategyCountResult] = await db.select({ count: count() }).from(strategiesTable);
   const [paymentCountResult] = await db.select({ count: count() }).from(paymentsTable);
+  const [pendingMasterResult] = await db
+    .select({ count: count() })
+    .from(masterAccountsTable)
+    .where(eq(masterAccountsTable.status, "pending_approval"));
 
   res.json({
     totalUsers: totalUsersResult.count,
     activeSubscriptions: activeSubsResult.count,
-    totalRevenue: parseFloat(revenueResult.total as string ?? "0"),
+    totalRevenue: parseFloat((revenueResult.total as string) ?? "0"),
     activeSlaveAccounts: slaveCountResult.count,
     activeStrategies: strategyCountResult.count,
     totalPayments: paymentCountResult.count,
+    pendingMasterApprovals: pendingMasterResult.count,
   });
 });
 

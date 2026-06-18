@@ -283,6 +283,16 @@ router.post("/payments/callback", async (req, res): Promise<void> => {
       return;
     }
 
+    // Duplicate-payment guard: only process once
+    if (payment.status !== "pending") {
+      logger.info(
+        { checkoutRequestId: CheckoutRequestID, existingStatus: payment.status },
+        "MPESA callback ignored — payment already processed"
+      );
+      res.json({ message: "OK" });
+      return;
+    }
+
     if (ResultCode === 0) {
       // Success
       const receiptItem = CallbackMetadata?.Item?.find((i: { Name: string }) => i.Name === "MpesaReceiptNumber");

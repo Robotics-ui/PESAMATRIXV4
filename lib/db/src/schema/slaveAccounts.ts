@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,7 +15,12 @@ export const slaveAccountsTable = pgTable("slave_accounts", {
   deploymentStatus: text("deployment_status"),
   connectionStatus: text("connection_status"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("slave_accounts_user_id_idx").on(table.userId),
+  index("slave_accounts_status_idx").on(table.status),
+  index("slave_accounts_metaapi_account_id_idx").on(table.metaapiAccountId),
+  index("slave_accounts_subscriber_id_idx").on(table.subscriberId),
+]);
 
 export const insertSlaveAccountSchema = createInsertSchema(slaveAccountsTable).omit({ id: true, createdAt: true });
 export type InsertSlaveAccount = z.infer<typeof insertSlaveAccountSchema>;
