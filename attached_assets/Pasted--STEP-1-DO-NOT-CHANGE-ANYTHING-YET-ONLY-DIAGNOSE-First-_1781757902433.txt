@@ -1,0 +1,69 @@
+🚨 STEP 1 — DO NOT CHANGE ANYTHING YET (ONLY DIAGNOSE)
+First, investigate why STK Push fails immediately.
+Add full logging ONLY (no logic changes):
+1. Log STK request payload before sending:
+BusinessShortCode
+Password
+Timestamp
+Amount
+PhoneNumber
+CallBackURL
+2. Log full Safaricom response:
+TypeScript
+logger.error({
+  stkData,
+  httpStatus: stkResponse.status,
+}, "FULL STK FAILURE RESPONSE");
+3. Log OAuth response:
+access_token response from Safaricom
+4. Log MPESA_CALLBACK_URL at runtime
+DO NOT modify endpoints or business logic yet.
+🚨 STEP 2 — VERIFY ENVIRONMENT VARIABLES (READ ONLY CHECK)
+Confirm these exist and are correct:
+MPESA_CONSUMER_KEY
+MPESA_CONSUMER_SECRET
+MPESA_PASSKEY
+MPESA_SHORTCODE
+MPESA_CALLBACK_URL
+Callback MUST be:
+https://blue-green-stages--fxke.replit.app/api/payments/callback⁠�
+Log its value.
+🚨 STEP 3 — VERIFY STK FLOW (NO CHANGES)
+Ensure flow is:
+OAuth token generation
+Timestamp generation
+Password generation
+STK Push request sent
+CheckoutRequestID received
+Log each step result clearly.
+🚨 STEP 4 — CHECK COMMON FAILURES (DO NOT FIX YET)
+After logging, identify if failure is caused by:
+Invalid consumer key or secret
+Wrong shortcode or passkey mismatch
+Invalid timestamp format (Safaricom production strict)
+Phone format not 2547XXXXXXXX
+Callback URL not publicly reachable
+Sandbox vs production mismatch
+DO NOT apply fixes until logs confirm root cause.
+🚨 STEP 5 — CALLBACK ROUTE VERIFICATION (READ ONLY)
+Confirm this endpoint exists:
+POST /api/payments/callback
+It must:
+Accept Safaricom JSON payload
+Return HTTP 200 immediately
+Log incoming request body
+DO NOT modify callback logic yet.
+🚨 STEP 6 — ONLY AFTER ROOT CAUSE IS FOUND
+Once logs show exact Safaricom error (stkData.errorMessage / errorCode):
+Apply minimal fix only
+Do NOT refactor unrelated code
+Ensure STK returns CheckoutRequestID
+Ensure callback updates payment status correctly
+🎯 FINAL GOAL
+After fix:
+STK Push must not fail immediately
+User receives M-Pesa prompt
+Callback updates payment to "completed"
+Logs show full transaction lifecycle
+⚠️ IMPORTANT RULE
+Do not guess the issue. Only fix after confirming from logs.
