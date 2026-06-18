@@ -17,7 +17,7 @@ type MetaApiAccountState = {
   connectionStatus: string;
 };
 
-function mapMetaApiState(state: string): string {
+export function mapMetaApiState(state: string): string {
   switch (state.toUpperCase()) {
     case "DEPLOYING":
       return "deploying";
@@ -35,7 +35,7 @@ function mapMetaApiState(state: string): string {
   }
 }
 
-function serializeAccount(a: typeof masterAccountsTable.$inferSelect) {
+export function serializeAccount(a: typeof masterAccountsTable.$inferSelect) {
   return {
     id: a.id,
     userId: a.userId,
@@ -46,9 +46,69 @@ function serializeAccount(a: typeof masterAccountsTable.$inferSelect) {
     status: a.status,
     deploymentStatus: a.deploymentStatus ?? null,
     connectionStatus: a.connectionStatus ?? null,
+    rejectionReason: a.rejectionReason ?? null,
     createdAt: a.createdAt,
   };
 }
+
+/**
+ * Deploy a MetaApi account. Called from both the admin approval route and
+ * optionally during testing. Returns the updated fields to store in the DB.
+ */
+export async function deployMasterToMetaApi(params: {
+  mt5Login: string;
+  plainPassword: string;
+  server: string;
+  broker: string;
+}): Promise<{ metaapiAccountId: string | null; status: string; deploymentStatus: string | null }> {
+  const metaapiToken = await getMetaApiToken();
+  if (!metaapiToken) {
+    return { metaapiAccountId: null, status: "connecting", deploymentStatus: null };
+  }
+
+  try {
+    const createResponse = await fetch(`${PROVISIONING_API}/users/current/accounts`, {
+      method: "POST",
+      headers: { "auth-token": metaapiToken, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        login: params.mt5Login,
+        password: params.plainPassword,
+        server: params.server,
+        name: `${params.broker}-${params.mt5Login}`,
+        platform: "mt5",
+        type: "cloud-g2",
+      }),
+    });
+
+    const createData = (await createResponse.json()) as { id?: string; message?: string };
+
+    if (!createData.id) {
+      logger.warn({ createData }, "MetaApi account creation returned no ID");
+      return { metaapiAccountId: null, status: "error", deploymentStatus: null };
+    }
+
+    const metaapiAccountId = createData.id;
+    logger.info({ metaapiAccountId }, "MetaApi account created");
+
+    const deployResponse = await fetch(
+      `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}/deploy`,
+      { method: "POST", headers: { "auth-token": metaapiToken } }
+    );
+
+    if (deployResponse.ok || deployResponse.status === 204) {
+      logger.info({ metaapiAccountId }, "MetaApi account deploy triggered");
+      return { metaapiAccountId, status: "deploying", deploymentStatus: "DEPLOYING" };
+    } else {
+      logger.warn({ metaapiAccountId }, "MetaApi deploy call returned non-OK");
+      return { metaapiAccountId, status: "connecting", deploymentStatus: null };
+    }
+  } catch (err) {
+    logger.error({ err }, "MetaApi account creation/deploy error");
+    return { metaapiAccountId: null, status: "error", deploymentStatus: null };
+  }
+}
+
+// ─── Routes ─────────────────────────────────────────────────────────────────
 
 router.get("/master-accounts", authenticate, async (req, res): Promise<void> => {
   const accounts = await db
@@ -59,6 +119,11 @@ router.get("/master-accounts", authenticate, async (req, res): Promise<void> => 
   res.json(accounts.map(serializeAccount));
 });
 
+/**
+ * Create a master account record.
+ * Submission goes to PENDING_APPROVAL — no MetaApi deployment happens here.
+ * An admin must approve the account before it is deployed and made active.
+ */
 router.post("/master-accounts", authenticate, async (req, res): Promise<void> => {
   const parsed = CreateMasterAccountBody.safeParse(req.body);
   if (!parsed.success) {
@@ -68,79 +133,23 @@ router.post("/master-accounts", authenticate, async (req, res): Promise<void> =>
 
   const { broker, server, mt5Login, investorPassword } = parsed.data;
 
-  const metaapiToken = await getMetaApiToken();
-  let metaapiAccountId: string | null = null;
-  let status = "connecting";
-  let deploymentStatus: string | null = null;
-  let connectionStatus: string | null = null;
-
-  if (metaapiToken) {
-    try {
-      // Step 1: Create the MetaApi account
-      const createResponse = await fetch(`${PROVISIONING_API}/users/current/accounts`, {
-        method: "POST",
-        headers: {
-          "auth-token": metaapiToken,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          login: mt5Login,
-          password: investorPassword,
-          server,
-          name: `${broker}-${mt5Login}`,
-          platform: "mt5",
-          type: "cloud-g2",
-        }),
-      });
-
-      const createData = (await createResponse.json()) as { id?: string; message?: string };
-
-      if (!createData.id) {
-        logger.warn({ createData }, "MetaApi account creation returned no ID");
-        status = "error";
-      } else {
-        metaapiAccountId = createData.id;
-        logger.info({ metaapiAccountId }, "MetaApi account created");
-
-        // Step 2: Deploy the account so MetaApi connects it to the broker
-        const deployResponse = await fetch(
-          `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}/deploy`,
-          {
-            method: "POST",
-            headers: { "auth-token": metaapiToken },
-          }
-        );
-
-        if (deployResponse.ok || deployResponse.status === 204) {
-          logger.info({ metaapiAccountId }, "MetaApi account deploy triggered");
-          status = "deploying";
-          deploymentStatus = "DEPLOYING";
-        } else {
-          const deployData = (await deployResponse.json().catch(() => ({}))) as { message?: string };
-          logger.warn({ metaapiAccountId, deployData }, "MetaApi deploy call returned non-OK");
-          status = "connecting";
-        }
-      }
-    } catch (err) {
-      logger.error({ err }, "MetaApi account creation/deploy error");
-      status = "error";
-    }
-  }
-
   const [account] = await db
     .insert(masterAccountsTable)
     .values({
       userId: req.userId!,
-      metaapiAccountId,
+      metaapiAccountId: null,
       mt5Login,
       broker,
       server,
       investorPasswordEncrypted: encryptCredential(investorPassword),
-      status,
-      deploymentStatus,
-      connectionStatus,
+      status: "pending_approval",
+      deploymentStatus: null,
+      connectionStatus: null,
+      rejectionReason: null,
     })
     .returning();
+
+  logger.info({ id: account.id, mt5Login, userId: req.userId }, "Master account submitted for approval");
 
   res.status(201).json(serializeAccount(account));
 });
@@ -241,7 +250,6 @@ router.delete("/master-accounts/:id", authenticate, async (req, res): Promise<vo
     .from(masterAccountsTable)
     .where(and(eq(masterAccountsTable.id, params.data.id), eq(masterAccountsTable.userId, req.userId!)));
 
-  // Undeploy from MetaApi before deleting if possible
   if (account?.metaapiAccountId) {
     const metaapiToken = await getMetaApiToken();
     if (metaapiToken) {

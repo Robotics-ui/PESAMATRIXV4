@@ -14,10 +14,10 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Server, Plus, Trash2, RefreshCw, AlertCircle } from "lucide-react";
+import { Server, Plus, Trash2, RefreshCw, AlertCircle, Clock, XCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const SETTLED_STATUSES = new Set(["connected", "disconnected"]);
+const SETTLED_STATUSES = new Set(["connected", "disconnected", "pending_approval", "rejected"]);
 const POLL_INTERVAL_MS = 10_000;
 
 function isPolling(status?: string | null): boolean {
@@ -29,6 +29,8 @@ function StatusBadge({ status }: { status?: string | null }) {
   if (status === "deploying") return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Deploying</Badge>;
   if (status === "connecting") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Connecting</Badge>;
   if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
+  if (status === "pending_approval") return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Pending Approval</Badge>;
+  if (status === "rejected") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
   return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{status ?? "error"}</Badge>;
 }
 
@@ -128,7 +130,7 @@ export default function MasterAccountsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Master Accounts</h1>
-            <p className="text-sm text-muted-foreground mt-1">Signal provider MT5 accounts copied from via MetaApi CopyFactory</p>
+            <p className="text-sm text-muted-foreground mt-1">Signal provider MT5 accounts — require admin approval before deployment</p>
           </div>
           <div className="flex items-center gap-3">
             {hasPolling && (
@@ -143,6 +145,19 @@ export default function MasterAccountsPage() {
           </div>
         </div>
 
+        {/* Approval notice */}
+        <Card className="border-purple-500/20 bg-purple-500/5">
+          <CardContent className="py-3">
+            <div className="flex items-start gap-2 text-sm text-purple-300">
+              <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+              <p>
+                Master accounts require admin approval before they are deployed to MetaApi and made available for strategies.
+                Slave accounts deploy immediately without approval.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {isLoading ? (
           <div className="flex justify-center py-12">
             <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -152,7 +167,7 @@ export default function MasterAccountsPage() {
             <CardContent className="flex flex-col items-center py-12 text-center">
               <Server className="h-12 w-12 text-muted-foreground/30 mb-4" />
               <h3 className="font-semibold text-foreground">No master accounts yet</h3>
-              <p className="text-sm text-muted-foreground mt-1">Add your first MetaApi master account</p>
+              <p className="text-sm text-muted-foreground mt-1">Submit your first master account for admin review</p>
               <Button onClick={() => setOpen(true)} className="mt-4 bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-2" /> Add Master Account
               </Button>
@@ -162,16 +177,31 @@ export default function MasterAccountsPage() {
           <div className="grid gap-4">
             {accounts.map((acc) => {
               const settling = !!acc.metaapiAccountId && isPolling(acc.status);
+              const isPendingApproval = acc.status === "pending_approval";
+              const isRejected = acc.status === "rejected";
               return (
                 <Card
                   key={acc.id}
-                  className={`border-border hover:border-blue-600/30 transition-colors ${settling ? "border-blue-600/20" : ""}`}
+                  className={`border-border transition-colors ${
+                    settling ? "border-blue-600/20 hover:border-blue-600/30" :
+                    isPendingApproval ? "border-purple-500/20 hover:border-purple-500/30" :
+                    isRejected ? "border-red-500/20 hover:border-red-500/30" :
+                    "hover:border-blue-600/30"
+                  }`}
                 >
                   <CardContent className="py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-4 min-w-0">
-                        <div className="h-10 w-10 rounded-lg bg-blue-600/10 flex items-center justify-center shrink-0">
-                          <Server className="h-5 w-5 text-blue-400" />
+                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+                          isPendingApproval ? "bg-purple-500/10" :
+                          isRejected ? "bg-red-500/10" :
+                          "bg-blue-600/10"
+                        }`}>
+                          <Server className={`h-5 w-5 ${
+                            isPendingApproval ? "text-purple-400" :
+                            isRejected ? "text-red-400" :
+                            "text-blue-400"
+                          }`} />
                         </div>
                         <div className="min-w-0 space-y-1">
                           <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
@@ -180,7 +210,9 @@ export default function MasterAccountsPage() {
                             <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
                               MetaApi ID: {acc.metaapiAccountId}
                             </p>
-                          ) : (
+                          ) : isPendingApproval ? (
+                            <p className="text-xs text-purple-400">Awaiting admin review</p>
+                          ) : isRejected ? null : (
                             <p className="text-xs text-red-400">No MetaApi ID — creation failed</p>
                           )}
                           <div className="flex items-center gap-3 pt-1 flex-wrap">
@@ -203,6 +235,14 @@ export default function MasterAccountsPage() {
                               </div>
                             )}
                           </div>
+                          {isRejected && acc.rejectionReason && (
+                            <div className="flex items-start gap-1.5 mt-1">
+                              <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                              <p className="text-xs text-red-300">
+                                Rejection reason: {acc.rejectionReason}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -228,7 +268,7 @@ export default function MasterAccountsPage() {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="dark bg-card border-border">
             <DialogHeader>
-              <DialogTitle>Add Master Account</DialogTitle>
+              <DialogTitle>Submit Master Account for Approval</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
               {error && (
@@ -236,6 +276,10 @@ export default function MasterAccountsPage() {
                   <AlertCircle className="h-4 w-4" /> {error}
                 </div>
               )}
+              <div className="flex items-start gap-2 p-3 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
+                <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                Your account details will be reviewed by an admin. You will see the status update once approved or rejected.
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>MT5 Login</Label>
@@ -256,9 +300,6 @@ export default function MasterAccountsPage() {
                   <Input placeholder="ICMarkets" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Submitting creates a real MetaApi account and deploys it. Status will auto-refresh every 10 seconds until connected or disconnected.
-              </p>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -267,7 +308,7 @@ export default function MasterAccountsPage() {
                 disabled={creating || !form.mt5Login || !form.broker || !form.investorPassword}
                 onClick={() => create({ data: { mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
               >
-                {creating ? "Creating..." : "Add Account"}
+                {creating ? "Submitting..." : "Submit for Approval"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -279,7 +320,7 @@ export default function MasterAccountsPage() {
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Master Account?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will undeploy the account from MetaApi and remove it along with all associated strategies. This cannot be undone.
+                This will remove the account and all associated strategies. If the account was approved and deployed, it will be undeployed from MetaApi. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

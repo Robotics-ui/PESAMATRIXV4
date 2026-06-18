@@ -164,11 +164,13 @@ export type MasterAccountStatus = typeof MasterAccountStatus[keyof typeof Master
 
 
 export const MasterAccountStatus = {
+  pending_approval: 'pending_approval',
   deploying: 'deploying',
   connecting: 'connecting',
   connected: 'connected',
   disconnected: 'disconnected',
   error: 'error',
+  rejected: 'rejected',
 } as const;
 
 export interface MasterAccount {
@@ -184,8 +186,17 @@ export interface MasterAccount {
   deploymentStatus?: string | null;
   /** @nullable */
   connectionStatus?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
   createdAt: string;
 }
+
+export type AdminMasterAccount = MasterAccount & ({
+  /** @nullable */
+  userEmail?: string | null;
+  /** @nullable */
+  userName?: string | null;
+});
 
 export interface SlaveAccountInput {
   broker: string;
@@ -398,4 +409,8 @@ export interface IntegrationStatus {
   webhook: IntegrationStatusWebhook;
   mode: IntegrationStatusMode;
 }
+
+export type RejectMasterAccountBody = {
+  reason: string;
+};
 

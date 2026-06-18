@@ -1,0 +1,215 @@
+MASTER AND SLAVE ACCOUNT POLICY
+
+MASTER ACCOUNTS
+
+Master accounts are signal providers.
+
+Because they affect many subscribers, they must be reviewed and approved by an administrator before becoming active.
+
+Workflow
+
+User adds Master Account
+
+↓
+
+Status = PENDING_APPROVAL
+
+↓
+
+Account details saved to database
+
+↓
+
+No MetaApi deployment
+
+↓
+
+No CopyFactory strategy creation
+
+↓
+
+No subscribers allowed
+
+↓
+
+Admin reviews account
+
+↓
+
+APPROVED or REJECTED
+
+If APPROVED:
+
+↓
+
+Deploy MetaApi account
+
+↓
+
+Create CopyFactory strategy
+
+↓
+
+Status = ACTIVE
+
+↓
+
+Can receive subscribers
+
+↓
+
+Can send copy trades
+
+If REJECTED:
+
+↓
+
+Status = REJECTED
+
+↓
+
+User receives reason
+
+---
+
+SLAVE ACCOUNTS
+
+Slave accounts are followers.
+
+They do not affect other users.
+
+Therefore they do NOT require admin approval.
+
+Workflow
+
+User adds Slave Account
+
+↓
+
+Create MetaApi account immediately
+
+↓
+
+Deploy automatically
+
+↓
+
+Create CopyFactory Subscriber automatically
+
+↓
+
+Status = ACTIVE
+
+↓
+
+Ready to receive copied trades
+
+---
+
+SUBSCRIPTION ENFORCEMENT
+
+A slave account being ACTIVE does NOT mean it can receive trades.
+
+The system must check subscription status.
+
+Rule
+
+ACTIVE SUBSCRIPTION
+
+↓
+
+Subscriber remains bound
+
+↓
+
+Receives copy trades
+
+EXPIRED SUBSCRIPTION
+
+↓
+
+Subscriber automatically unbound
+
+↓
+
+Receives no copy trades
+
+---
+
+IMPORTANT SEPARATION
+
+Master Account Approval
+
+Controls WHO can provide signals.
+
+Subscription Enforcement
+
+Controls WHO can receive signals.
+
+These are separate systems.
+
+---
+
+Example
+
+User A submits a master account.
+
+Status = PENDING_APPROVAL
+
+Cannot create strategy.
+
+Cannot send trades.
+
+Admin approves.
+
+Status = ACTIVE
+
+Strategy created.
+
+Subscribers can now follow.
+
+---
+
+User B adds a slave account.
+
+Account deploys immediately.
+
+Subscriber account created immediately.
+
+But User B has not paid.
+
+Result:
+
+Slave account exists.
+
+Subscriber account exists.
+
+No strategy binding.
+
+No copied trades received.
+
+After payment:
+
+Subscriber bound to selected strategy.
+
+Copy trades begin.
+
+After subscription expires:
+
+Subscriber automatically unbound.
+
+Copy trades stop immediately.
+
+---
+
+FINAL RULES
+
+Master Accounts:
+Require admin approval before deployment.
+
+Slave Accounts:
+Deploy automatically.
+
+Only active paid subscriptions may receive copied trades.
+
+Unpaid or expired subscriptions must never receive copied trades even if the slave account is connected and active.

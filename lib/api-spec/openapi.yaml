@@ -585,6 +585,93 @@ paths:
                 $ref: "#/components/schemas/DashboardSummary"
 
   # ADMIN
+  /admin/master-accounts:
+    get:
+      operationId: listAdminMasterAccounts
+      tags: [admin]
+      summary: Admin list of all master accounts with owner info
+      responses:
+        "200":
+          description: All master accounts with user info
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminMasterAccount"
+
+  /admin/master-accounts/{id}/approve:
+    post:
+      operationId: approveMasterAccount
+      tags: [admin]
+      summary: Approve a pending master account and deploy it to MetaApi
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved master account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMasterAccount"
+        "400":
+          description: Already processed or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/master-accounts/{id}/reject:
+    post:
+      operationId: rejectMasterAccount
+      tags: [admin]
+      summary: Reject a pending master account with a reason
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Rejected master account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminMasterAccount"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/stats:
     get:
       operationId: getAdminStats
@@ -957,14 +1044,26 @@ components:
           type: string
         status:
           type: string
-          enum: [deploying, connecting, connected, disconnected, error]
+          enum: [pending_approval, deploying, connecting, connected, disconnected, error, rejected]
         deploymentStatus:
           type: ["string", "null"]
         connectionStatus:
           type: ["string", "null"]
+        rejectionReason:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
+
+    AdminMasterAccount:
+      allOf:
+        - $ref: "#/components/schemas/MasterAccount"
+        - type: object
+          properties:
+            userEmail:
+              type: ["string", "null"]
+            userName:
+              type: ["string", "null"]
 
     # SLAVE ACCOUNT
     SlaveAccountInput:

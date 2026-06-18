@@ -7,6 +7,8 @@ import { getMetaApiToken } from "../lib/metaapi";
 
 const router = Router();
 
+const BLOCKED_STATUSES = new Set(["pending_approval", "rejected"]);
+
 router.get("/strategies", authenticate, async (req, res): Promise<void> => {
   const strategies = await db
     .select()
@@ -25,7 +27,6 @@ router.post("/strategies", authenticate, async (req, res): Promise<void> => {
 
   const { strategyName, masterAccountId } = parsed.data;
 
-  // Verify the master account belongs to this user
   const [masterAccount] = await db
     .select()
     .from(masterAccountsTable)
@@ -33,6 +34,15 @@ router.post("/strategies", authenticate, async (req, res): Promise<void> => {
 
   if (!masterAccount) {
     res.status(400).json({ error: "Master account not found" });
+    return;
+  }
+
+  if (BLOCKED_STATUSES.has(masterAccount.status)) {
+    const reason =
+      masterAccount.status === "pending_approval"
+        ? "Master account is pending admin approval. Strategies can only be created once the account is approved and deployed."
+        : "Master account was rejected and cannot be used for strategies.";
+    res.status(400).json({ error: reason });
     return;
   }
 

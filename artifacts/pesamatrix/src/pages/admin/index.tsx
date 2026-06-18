@@ -11,6 +11,10 @@ import {
   useGetSchedulerStatus,
   useTriggerSchedulerRun,
   getGetSchedulerStatusQueryKey,
+  useListAdminMasterAccounts,
+  useApproveMasterAccount,
+  useRejectMasterAccount,
+  getListAdminMasterAccountsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle,
   CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity,
-  Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw,
+  Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetAdminSettingsQueryKey } from "@workspace/api-client-react";
 
@@ -144,7 +150,7 @@ function timeAgo(iso: string | null | undefined): string {
 function SchedulerMonitorTab() {
   const qc = useQueryClient();
   const { data: status, isLoading, refetch } = useGetSchedulerStatus({
-    query: { refetchInterval: 15_000 },
+    query: { queryKey: getGetSchedulerStatusQueryKey(), refetchInterval: 15_000 },
   });
   const { mutate: triggerRun, isPending: triggering } = useTriggerSchedulerRun({
     mutation: {
@@ -425,6 +431,215 @@ function SchedulerMonitorTab() {
   );
 }
 
+function MasterApprovalStatusBadge({ status }: { status?: string | null }) {
+  if (status === "pending_approval") return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Pending Approval</Badge>;
+  if (status === "deploying") return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Deploying</Badge>;
+  if (status === "connecting") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Connecting</Badge>;
+  if (status === "connected") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Connected</Badge>;
+  if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
+  if (status === "rejected") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
+  return <Badge className="bg-muted/50 text-muted-foreground border-muted">{status ?? "unknown"}</Badge>;
+}
+
+function MasterApprovalsTab() {
+  const qc = useQueryClient();
+  const { data: accounts, isLoading, refetch } = useListAdminMasterAccounts();
+  const [rejectId, setRejectId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
+
+  const { mutate: approve, isPending: approving } = useApproveMasterAccount({
+    mutation: {
+      onSuccess: () => void qc.invalidateQueries({ queryKey: getListAdminMasterAccountsQueryKey() }),
+    },
+  });
+
+  const { mutate: reject, isPending: rejecting } = useRejectMasterAccount({
+    mutation: {
+      onSuccess: () => {
+        setRejectId(null);
+        setRejectReason("");
+        setRejectError("");
+        void qc.invalidateQueries({ queryKey: getListAdminMasterAccountsQueryKey() });
+      },
+      onError: (err: unknown) => {
+        const e = err as { data?: { error?: string } };
+        setRejectError(e?.data?.error ?? "Failed to reject account");
+      },
+    },
+  });
+
+  const pending = (accounts ?? []).filter((a) => a.status === "pending_approval");
+  const rest = (accounts ?? []).filter((a) => a.status !== "pending_approval");
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-foreground">{pending.length} pending approval</p>
+          <p className="text-xs text-muted-foreground">Approve to deploy to MetaApi · Reject with reason to notify user</p>
+        </div>
+        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => void refetch()}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
+        </Button>
+      </div>
+
+      {/* Pending accounts — action required */}
+      {pending.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-purple-400 uppercase tracking-wide">Awaiting Review</p>
+          {pending.map((acc) => (
+            <Card key={acc.id} className="border-purple-500/30 bg-purple-500/5">
+              <CardContent className="py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                      <Server className="h-4.5 w-4.5 text-purple-400" />
+                    </div>
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
+                        <MasterApprovalStatusBadge status={acc.status} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Owner: <span className="text-foreground">{acc.userName ?? "—"}</span>
+                        {acc.userEmail && <span className="ml-1 text-muted-foreground/70">({acc.userEmail})</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Submitted: {new Date(acc.createdAt!).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      className="h-8 text-xs bg-green-600 hover:bg-green-700"
+                      disabled={approving}
+                      onClick={() => approve({ id: acc.id! })}
+                    >
+                      <ThumbsUp className="h-3.5 w-3.5 mr-1.5" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                      onClick={() => { setRejectId(acc.id!); setRejectReason(""); setRejectError(""); }}
+                    >
+                      <ThumbsDown className="h-3.5 w-3.5 mr-1.5" /> Reject
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-border">
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No accounts pending approval.
+          </CardContent>
+        </Card>
+      )}
+
+      {/* All other accounts — history */}
+      {rest.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">All Accounts</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wide">
+                  <th className="text-left py-2 pr-4">MT5 Login</th>
+                  <th className="text-left py-2 pr-4">Broker · Server</th>
+                  <th className="text-left py-2 pr-4">Owner</th>
+                  <th className="text-left py-2 pr-4">Status</th>
+                  <th className="text-left py-2 pr-4">MetaApi ID</th>
+                  <th className="text-right py-2">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rest.map((acc) => (
+                  <tr key={acc.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <td className="py-3 pr-4 font-medium text-foreground">{acc.mt5Login}</td>
+                    <td className="py-3 pr-4 text-muted-foreground text-xs">{acc.broker} · {acc.server}</td>
+                    <td className="py-3 pr-4 text-muted-foreground text-xs">
+                      {acc.userName ?? "—"}
+                      {acc.userEmail && <span className="block text-muted-foreground/60">{acc.userEmail}</span>}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <div className="space-y-1">
+                        <MasterApprovalStatusBadge status={acc.status} />
+                        {acc.rejectionReason && (
+                          <p className="text-xs text-red-300 max-w-xs">{acc.rejectionReason}</p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 pr-4 text-xs font-mono text-muted-foreground truncate max-w-[160px]">
+                      {acc.metaapiAccountId ?? "—"}
+                    </td>
+                    <td className="py-3 text-right text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(acc.createdAt!).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Reject dialog */}
+      <Dialog open={rejectId !== null} onOpenChange={() => { setRejectId(null); setRejectReason(""); setRejectError(""); }}>
+        <DialogContent className="dark bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Reject Master Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {rejectError && (
+              <div className="flex items-center gap-2 p-3 rounded bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                <AlertCircle className="h-4 w-4" /> {rejectError}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Rejection Reason</Label>
+              <Textarea
+                placeholder="Explain why this account is being rejected..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">This reason will be visible to the account owner.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRejectId(null); setRejectReason(""); }}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              disabled={rejecting || !rejectReason.trim()}
+              onClick={() => {
+                if (rejectId && rejectReason.trim()) {
+                  reject({ id: rejectId, data: { reason: rejectReason.trim() } });
+                }
+              }}
+            >
+              {rejecting ? "Rejecting..." : "Reject Account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -530,12 +745,32 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <Tabs defaultValue="users" className="space-y-4">
+        <Tabs defaultValue="approvals" className="space-y-4">
           <TabsList className="bg-muted/50">
+            <TabsTrigger value="approvals" className="relative">
+              Approvals
+              {/* Pending count badge */}
+            </TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="monitor">Enforcement Monitor</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
+
+          {/* Master Approvals tab */}
+          <TabsContent value="approvals">
+            <Card className="border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Server className="h-4 w-4 text-purple-400" />
+                  Master Account Approvals
+                </CardTitle>
+                <CardDescription>Review and approve master MT5 accounts before MetaApi deployment</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <MasterApprovalsTab />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Users tab */}
           <TabsContent value="users">

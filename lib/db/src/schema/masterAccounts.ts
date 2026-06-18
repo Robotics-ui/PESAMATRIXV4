@@ -10,9 +10,10 @@ export const masterAccountsTable = pgTable("master_accounts", {
   broker: text("broker").notNull(),
   server: text("server").notNull(),
   investorPasswordEncrypted: text("investor_password_encrypted").notNull(),
-  status: text("status").notNull().default("connecting"),
+  status: text("status").notNull().default("pending_approval"),
   deploymentStatus: text("deployment_status"),
   connectionStatus: text("connection_status"),
+  rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

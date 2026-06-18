@@ -1,1 +1,3 @@
 - [Orval hook naming](orval-naming.md) — generated hooks use useList* for GET-all, query key functions use getList*/getGet* prefixes; never guess, grep the generated file.
+- [Orval codegen index fix](orval-codegen-index.md) — Orval regenerates lib/api-zod/src/index.ts on every codegen run; fix-zod-index.mjs strips the stale generated/types re-export to prevent duplicate name conflicts.
+- [api-server zod import](api-server-zod.md) — api-server has no direct zod dependency; never import from zod/v4 there. Use manual validation (parseInt, typeof checks) or use @workspace/api-zod generated schemas instead.

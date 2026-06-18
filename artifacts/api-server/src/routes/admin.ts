@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { eq, sum, count } from "drizzle-orm";
-import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable } from "@workspace/db";
+import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { invalidateMetaApiTokenCache } from "../lib/metaapi";
 import { getSchedulerStatus, runEnforcementTick } from "../lib/scheduler";
+import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
+import { decryptCredential } from "../lib/auth";
 
 const router = Router();
 
@@ -189,6 +191,102 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
 
   res.json({ ...settings, dailyFee: parseFloat(settings.dailyFee as string) });
 });
+
+// ─── Master Account Approval ────────────────────────────────────────────────
+
+router.get("/admin/master-accounts", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const accounts = await db.select().from(masterAccountsTable);
+  const users = await db.select().from(usersTable);
+
+  const result = accounts.map((a) => {
+    const user = users.find((u) => u.id === a.userId);
+    return {
+      ...serializeAccount(a),
+      userEmail: user?.email ?? null,
+      userName: user?.name ?? null,
+    };
+  });
+
+  res.json(result);
+});
+
+router.post("/admin/master-accounts/:id/approve", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const rawId = parseInt(String(req.params.id ?? ""), 10);
+  if (!rawId || rawId <= 0) {
+    res.status(400).json({ error: "Invalid account ID" });
+    return;
+  }
+
+  const [account] = await db
+    .select()
+    .from(masterAccountsTable)
+    .where(eq(masterAccountsTable.id, rawId));
+
+  if (!account) {
+    res.status(404).json({ error: "Master account not found" });
+    return;
+  }
+
+  if (account.status !== "pending_approval") {
+    res.status(400).json({ error: `Account is already ${account.status}` });
+    return;
+  }
+
+  const plainPassword = decryptCredential(account.investorPasswordEncrypted);
+  const deployed = await deployMasterToMetaApi({
+    mt5Login: account.mt5Login,
+    plainPassword,
+    server: account.server,
+    broker: account.broker,
+  });
+
+  const [updated] = await db
+    .update(masterAccountsTable)
+    .set({
+      metaapiAccountId: deployed.metaapiAccountId,
+      status: deployed.status,
+      deploymentStatus: deployed.deploymentStatus,
+      rejectionReason: null,
+    })
+    .where(eq(masterAccountsTable.id, account.id))
+    .returning();
+
+  res.json({ ...serializeAccount(updated), userEmail: null, userName: null });
+});
+
+router.post("/admin/master-accounts/:id/reject", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const rawId = parseInt(String(req.params.id ?? ""), 10);
+  if (!rawId || rawId <= 0) {
+    res.status(400).json({ error: "Invalid account ID" });
+    return;
+  }
+
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  if (!reason) {
+    res.status(400).json({ error: "reason is required" });
+    return;
+  }
+
+  const [account] = await db
+    .select()
+    .from(masterAccountsTable)
+    .where(eq(masterAccountsTable.id, rawId));
+
+  if (!account) {
+    res.status(404).json({ error: "Master account not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(masterAccountsTable)
+    .set({ status: "rejected", rejectionReason: reason })
+    .where(eq(masterAccountsTable.id, account.id))
+    .returning();
+
+  res.json({ ...serializeAccount(updated), userEmail: null, userName: null });
+});
+
+// ─── Scheduler endpoints ─────────────────────────────────────────────────────
 
 router.get("/admin/scheduler-status", authenticate, requireAdmin, async (_req, res): Promise<void> => {
   const schedulerStatus = getSchedulerStatus();

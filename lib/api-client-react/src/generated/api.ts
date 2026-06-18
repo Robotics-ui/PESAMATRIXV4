@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminMasterAccount,
   AdminSettings,
   AdminSettingsUpdate,
   AdminStats,
@@ -42,6 +43,7 @@ import type {
   PaymentInput,
   PaymentStatusResponse,
   RegisterInput,
+  RejectMasterAccountBody,
   SchedulerStatusResponse,
   SlaveAccount,
   SlaveAccountInput,
@@ -2203,6 +2205,225 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
+
+export const getListAdminMasterAccountsUrl = () => {
+
+
+
+
+  return `/api/admin/master-accounts`
+}
+
+/**
+ * @summary Admin list of all master accounts with owner info
+ */
+export const listAdminMasterAccounts = async ( options?: RequestInit): Promise<AdminMasterAccount[]> => {
+
+  return customFetch<AdminMasterAccount[]>(getListAdminMasterAccountsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminMasterAccountsQueryKey = () => {
+    return [
+    `/api/admin/master-accounts`
+    ] as const;
+    }
+
+
+export const getListAdminMasterAccountsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminMasterAccounts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminMasterAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminMasterAccountsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminMasterAccounts>>> = ({ signal }) => listAdminMasterAccounts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminMasterAccounts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminMasterAccountsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminMasterAccounts>>>
+export type ListAdminMasterAccountsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Admin list of all master accounts with owner info
+ */
+
+export function useListAdminMasterAccounts<TData = Awaited<ReturnType<typeof listAdminMasterAccounts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminMasterAccounts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminMasterAccountsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getApproveMasterAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/master-accounts/${id}/approve`
+}
+
+/**
+ * @summary Approve a pending master account and deploy it to MetaApi
+ */
+export const approveMasterAccount = async (id: number, options?: RequestInit): Promise<AdminMasterAccount> => {
+
+  return customFetch<AdminMasterAccount>(getApproveMasterAccountUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getApproveMasterAccountMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveMasterAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveMasterAccount>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['approveMasterAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveMasterAccount>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveMasterAccount(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveMasterAccountMutationResult = NonNullable<Awaited<ReturnType<typeof approveMasterAccount>>>
+
+    export type ApproveMasterAccountMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Approve a pending master account and deploy it to MetaApi
+ */
+export const useApproveMasterAccount = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveMasterAccount>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveMasterAccount>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getApproveMasterAccountMutationOptions(options));
+    }
+
+export const getRejectMasterAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/master-accounts/${id}/reject`
+}
+
+/**
+ * @summary Reject a pending master account with a reason
+ */
+export const rejectMasterAccount = async (id: number,
+    rejectMasterAccountBody: RejectMasterAccountBody, options?: RequestInit): Promise<AdminMasterAccount> => {
+
+  return customFetch<AdminMasterAccount>(getRejectMasterAccountUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rejectMasterAccountBody,)
+  }
+);}
+
+
+
+
+export const getRejectMasterAccountMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectMasterAccount>>, TError,{id: number;data: BodyType<RejectMasterAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectMasterAccount>>, TError,{id: number;data: BodyType<RejectMasterAccountBody>}, TContext> => {
+
+const mutationKey = ['rejectMasterAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectMasterAccount>>, {id: number;data: BodyType<RejectMasterAccountBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rejectMasterAccount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectMasterAccountMutationResult = NonNullable<Awaited<ReturnType<typeof rejectMasterAccount>>>
+    export type RejectMasterAccountMutationBody = BodyType<RejectMasterAccountBody>
+    export type RejectMasterAccountMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Reject a pending master account with a reason
+ */
+export const useRejectMasterAccount = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectMasterAccount>>, TError,{id: number;data: BodyType<RejectMasterAccountBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectMasterAccount>>,
+        TError,
+        {id: number;data: BodyType<RejectMasterAccountBody>},
+        TContext
+      > => {
+      return useMutation(getRejectMasterAccountMutationOptions(options));
+    }
 
 export const getGetAdminStatsUrl = () => {
 
