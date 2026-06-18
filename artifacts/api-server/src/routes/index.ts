@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
 import usersRouter from "./users";
@@ -28,5 +28,10 @@ router.use(tradeLogsRouter);
 router.use(dashboardRouter);
 router.use(adminRouter);
 router.use(webhooksRouter);
+
+// Catch-all for unmatched /api routes — return JSON instead of falling through to the React app
+router.use((_req: Request, res: Response) => {
+  res.status(404).json({ error: "API route not found" });
+});
 
 export default router;

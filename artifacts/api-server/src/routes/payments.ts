@@ -274,6 +274,10 @@ router.get("/payments/:checkoutRequestId/status", authenticate, async (req, res)
   });
 });
 
+router.get("/payments/callback", (_req, res): void => {
+  res.json({ status: "active", message: "M-Pesa STK Push callback endpoint is active. Safaricom posts to this URL." });
+});
+
 router.post("/payments/callback", async (req, res): Promise<void> => {
   // Step 5: Log incoming Safaricom callback immediately
   logger.info({ rawBody: req.body }, "MPESA callback received");
