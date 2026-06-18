@@ -246,6 +246,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /payments/{checkoutRequestId}/verify:
+    post:
+      operationId: verifyPayment
+      tags: [payments]
+      summary: Manually verify payment via Daraja STK Query (I Have Paid button)
+      parameters:
+        - in: path
+          name: checkoutRequestId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Payment status after querying Safaricom
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatusResponse"
+        "404":
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /payments/callback:
     post:
       operationId: mpesaCallback

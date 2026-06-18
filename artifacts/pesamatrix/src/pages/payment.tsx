@@ -6,13 +6,14 @@ import {
   useListPayments,
   useGetAdminSettings,
   useGetPaymentStatus,
+  useVerifyPayment,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Smartphone, Clock, CreditCard, Info, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Smartphone, Clock, CreditCard, Info, Loader2, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMySubscriptionQueryKey } from "@workspace/api-client-react";
 
@@ -78,6 +79,35 @@ export default function PaymentPage() {
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { refetch: refetchStatus } = useGetPaymentStatus(checkoutId ?? "");
+  const { mutate: verifyMutate, isPending: isVerifying } = useVerifyPayment({
+    mutation: {
+      onSuccess: (data) => {
+        if (data.status === "completed") {
+          stopPolling();
+          setPollStatus("confirmed");
+          const receipt = data.mpesaReceipt;
+          setPollMessage(receipt ? `Receipt: ${receipt}` : "Subscription activated!");
+          refetchPayments();
+          void qc.invalidateQueries({ queryKey: getGetMySubscriptionQueryKey() });
+        } else if (data.status === "failed") {
+          stopPolling();
+          setPollStatus("failed");
+          setPollMessage("Payment was cancelled or failed. Please try again.");
+          refetchPayments();
+        } else {
+          setPollMessage("Payment not confirmed yet. Please complete the M-Pesa prompt or wait.");
+        }
+      },
+      onError: () => {
+        setPollMessage("Could not reach Safaricom to verify. Keep waiting or try again shortly.");
+      },
+    },
+  });
+
+  function handleManualCheck() {
+    if (!checkoutId) return;
+    verifyMutate({ checkoutRequestId: checkoutId });
+  }
 
   function stopPolling() {
     if (pollTimer.current) {
@@ -275,15 +305,30 @@ export default function PaymentPage() {
 
             {/* Status feedback */}
             {pollStatus === "polling" && (
-              <div className="flex items-start gap-3 p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                <Loader2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5 animate-spin" />
-                <div>
-                  <p className="text-sm font-medium text-green-400">STK Push Sent — Waiting for PIN…</p>
-                  <p className="text-xs text-muted-foreground mt-1">{pollMessage}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Checking automatically every few seconds.
-                  </p>
+              <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Loader2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5 animate-spin" />
+                  <div>
+                    <p className="text-sm font-medium text-green-400">STK Push Sent — Waiting for PIN…</p>
+                    <p className="text-xs text-muted-foreground mt-1">{pollMessage}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Checking automatically every few seconds.
+                    </p>
+                  </div>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManualCheck}
+                  disabled={isVerifying}
+                  className="w-full border-green-500/40 text-green-400 hover:bg-green-500/10 hover:text-green-300"
+                >
+                  {isVerifying ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Checking with Safaricom…</>
+                  ) : (
+                    <><RefreshCw className="h-3.5 w-3.5 mr-2" /> I Have Paid — Check Now</>
+                  )}
+                </Button>
               </div>
             )}
 

@@ -179,6 +179,20 @@ export const GetPaymentStatusResponse = zod.object({
 
 
 /**
+ * @summary Manually verify payment via Daraja STK Query (I Have Paid button)
+ */
+export const VerifyPaymentParams = zod.object({
+  "checkoutRequestId": zod.coerce.string()
+})
+
+export const VerifyPaymentResponse = zod.object({
+  "status": zod.enum(['pending', 'completed', 'failed']),
+  "mpesaReceipt": zod.string().nullish(),
+  "amount": zod.number().optional()
+})
+
+
+/**
  * @summary M-Pesa callback endpoint (called by Safaricom)
  */
 export const MpesaCallbackBody = zod.object({

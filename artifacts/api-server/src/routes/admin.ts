@@ -144,17 +144,19 @@ router.get("/admin/payments", authenticate, requireAdmin, async (_req, res): Pro
   res.json(payments.map((p) => ({ ...p, amount: parseFloat(p.amount as string) })));
 });
 
-router.get("/admin/settings", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+router.get("/admin/settings", authenticate, async (req, res): Promise<void> => {
   const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
   if (!settings) {
     const [created] = await db
       .insert(adminSettingsTable)
       .values({ dailyFee: "100", minDays: 1, maxDays: 365 })
       .returning();
-    res.json({ ...created, dailyFee: parseFloat(created.dailyFee as string) });
+    const base = { ...created, dailyFee: parseFloat(created.dailyFee as string) };
+    res.json(req.userRole === "admin" ? base : { id: base.id, dailyFee: base.dailyFee, minDays: base.minDays, maxDays: base.maxDays, updatedAt: base.updatedAt });
     return;
   }
-  res.json({ ...settings, dailyFee: parseFloat(settings.dailyFee as string) });
+  const base = { ...settings, dailyFee: parseFloat(settings.dailyFee as string) };
+  res.json(req.userRole === "admin" ? base : { id: base.id, dailyFee: base.dailyFee, minDays: base.minDays, maxDays: base.maxDays, updatedAt: base.updatedAt });
 });
 
 router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Promise<void> => {

@@ -64,12 +64,14 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
   const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
   const passkey = process.env.MPESA_PASSKEY;
   const shortcode = process.env.MPESA_SHORTCODE;
-  // Build callback URL: prefer explicit env var, fall back to REPLIT_DOMAINS
+  // Build callback URL: always prefer REPLIT_DOMAINS (auto-correct production domain),
+  // fall back to MPESA_CALLBACK_URL only when REPLIT_DOMAINS is unavailable.
   const replitDomains = process.env.REPLIT_DOMAINS;
   const firstDomain = replitDomains ? replitDomains.split(",")[0].trim() : null;
   const callbackUrl =
+    (firstDomain ? `https://${firstDomain}/api/payments/callback` : null) ||
     process.env.MPESA_CALLBACK_URL ||
-    (firstDomain ? `https://${firstDomain}/api/payments/callback` : undefined);
+    undefined;
 
   // Log callback URL at runtime so it can be verified in logs
   logger.info(
@@ -254,26 +256,6 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
   }
 });
 
-router.get("/payments/:checkoutRequestId/status", authenticate, async (req, res): Promise<void> => {
-  const { checkoutRequestId } = req.params;
-
-  const [payment] = await db
-    .select()
-    .from(paymentsTable)
-    .where(eq(paymentsTable.checkoutRequestId, checkoutRequestId as string));
-
-  if (!payment || payment.userId !== req.userId!) {
-    res.status(404).json({ error: "Payment not found" });
-    return;
-  }
-
-  res.json({
-    status: payment.status,
-    mpesaReceipt: payment.mpesaReceipt ?? null,
-    amount: parseFloat(payment.amount as string),
-  });
-});
-
 router.get("/payments/callback", (_req, res): void => {
   res.json({ status: "active", message: "M-Pesa STK Push callback endpoint is active. Safaricom posts to this URL." });
 });
@@ -328,6 +310,112 @@ router.post("/payments/callback", async (req, res): Promise<void> => {
   } catch (err) {
     logger.error({ err }, "M-Pesa callback error");
     res.json({ message: "OK" });
+  }
+});
+
+router.get("/payments/:checkoutRequestId/status", authenticate, async (req, res): Promise<void> => {
+  const { checkoutRequestId } = req.params;
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.checkoutRequestId, checkoutRequestId as string));
+
+  if (!payment || payment.userId !== req.userId!) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+
+  res.json({
+    status: payment.status,
+    mpesaReceipt: payment.mpesaReceipt ?? null,
+    amount: parseFloat(payment.amount as string),
+  });
+});
+
+router.post("/payments/:checkoutRequestId/verify", authenticate, async (req, res): Promise<void> => {
+  const { checkoutRequestId } = req.params;
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(eq(paymentsTable.checkoutRequestId, checkoutRequestId as string));
+
+  if (!payment || payment.userId !== req.userId!) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+
+  if (payment.status !== "pending") {
+    res.json({ status: payment.status, mpesaReceipt: payment.mpesaReceipt ?? null, amount: parseFloat(payment.amount as string) });
+    return;
+  }
+
+  const consumerKey = process.env.MPESA_CONSUMER_KEY;
+  const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
+  const passkey = process.env.MPESA_PASSKEY;
+  const shortcode = process.env.MPESA_SHORTCODE;
+
+  if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
+    res.json({ status: payment.status, mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
+    return;
+  }
+
+  try {
+    const authResponse = await fetch(
+      "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${consumerKey}:${consumerSecret}`).toString("base64")}`,
+        },
+      }
+    );
+    const authData = (await authResponse.json()) as { access_token?: string };
+    if (!authData.access_token) {
+      res.json({ status: payment.status, mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, "").slice(0, 14);
+    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
+
+    const queryResponse = await fetch("https://api.safaricom.co.ke/mpesa/stkpushquery/v1/query", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authData.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        BusinessShortCode: shortcode,
+        Password: password,
+        Timestamp: timestamp,
+        CheckoutRequestID: checkoutRequestId,
+      }),
+    });
+
+    const queryData = (await queryResponse.json()) as {
+      ResultCode?: string | number;
+      ResultDesc?: string;
+      errorCode?: string;
+    };
+
+    logger.info({ checkoutRequestId, queryData }, "STK Query response");
+
+    const resultCode = queryData.ResultCode !== undefined ? Number(queryData.ResultCode) : null;
+
+    if (resultCode === 0) {
+      await db.update(paymentsTable).set({ status: "completed" }).where(eq(paymentsTable.id, payment.id));
+      await activateSubscription(payment.userId, payment.days);
+      res.json({ status: "completed", mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
+    } else if (resultCode !== null && resultCode !== 0) {
+      await db.update(paymentsTable).set({ status: "failed" }).where(eq(paymentsTable.id, payment.id));
+      res.json({ status: "failed", mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
+    } else {
+      res.json({ status: "pending", mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
+    }
+  } catch (err) {
+    logger.error({ err }, "STK Query error");
+    res.json({ status: payment.status, mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
   }
 });
 

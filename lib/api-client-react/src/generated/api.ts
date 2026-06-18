@@ -878,6 +878,76 @@ export function useGetPaymentStatus<TData = Awaited<ReturnType<typeof getPayment
 
 
 
+export const getVerifyPaymentUrl = (checkoutRequestId: string,) => {
+
+
+
+
+  return `/api/payments/${checkoutRequestId}/verify`
+}
+
+/**
+ * @summary Manually verify payment via Daraja STK Query (I Have Paid button)
+ */
+export const verifyPayment = async (checkoutRequestId: string, options?: RequestInit): Promise<PaymentStatusResponse> => {
+
+  return customFetch<PaymentStatusResponse>(getVerifyPaymentUrl(checkoutRequestId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getVerifyPaymentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyPayment>>, TError,{checkoutRequestId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyPayment>>, TError,{checkoutRequestId: string}, TContext> => {
+
+const mutationKey = ['verifyPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyPayment>>, {checkoutRequestId: string}> = (props) => {
+          const {checkoutRequestId} = props ?? {};
+
+          return  verifyPayment(checkoutRequestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof verifyPayment>>>
+
+    export type VerifyPaymentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Manually verify payment via Daraja STK Query (I Have Paid button)
+ */
+export const useVerifyPayment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyPayment>>, TError,{checkoutRequestId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyPayment>>,
+        TError,
+        {checkoutRequestId: string},
+        TContext
+      > => {
+      return useMutation(getVerifyPaymentMutationOptions(options));
+    }
+
 export const getMpesaCallbackUrl = () => {
 
 
