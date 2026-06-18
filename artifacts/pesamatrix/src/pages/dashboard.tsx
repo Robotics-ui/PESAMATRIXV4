@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp,
   Server,
@@ -15,7 +16,44 @@ import {
   CreditCard,
   Clock,
   Activity,
+  AlertCircle,
 } from "lucide-react";
+
+interface CriticalAnnouncement {
+  id: number; title: string; message: string; priority: string;
+}
+
+function CriticalAnnouncementBanner({ token }: { token: string | null }) {
+  const { data: announcements = [] } = useQuery<CriticalAnnouncement[]>({
+    queryKey: ["announcements-critical"],
+    queryFn: async () => {
+      const res = await fetch("/api/announcements", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return [];
+      return (res.json() as Promise<CriticalAnnouncement[]>);
+    },
+    enabled: !!token,
+    select: (data) => data.filter((a) => a.priority === "critical"),
+  });
+
+  if (announcements.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {announcements.map((a) => (
+        <div key={a.id} className="flex items-start gap-3 rounded-lg border border-red-600/40 bg-red-600/10 px-4 py-3">
+          <AlertCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="font-semibold text-red-300 text-sm">{a.title}: </span>
+            <span className="text-sm text-red-200/80 line-clamp-2">{a.message}</span>
+          </div>
+          <Link href="/announcements">
+            <span className="text-xs text-red-400 underline shrink-0 cursor-pointer">View all</span>
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function SubscriptionCountdown({ endDate, daysLeft }: { endDate?: string | null; daysLeft?: number | null }) {
   if (!endDate || !daysLeft || daysLeft <= 0) {
@@ -66,7 +104,7 @@ function SubscriptionCountdown({ endDate, daysLeft }: { endDate?: string | null;
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { data: summary, isLoading } = useGetDashboardSummary();
   const { data: subscription } = useGetMySubscription();
   const { data: settings } = useGetAdminSettings();
@@ -90,6 +128,9 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-foreground">Welcome back, {user?.name?.split(" ")[0]}</h1>
           <p className="text-muted-foreground text-sm mt-1">Here&apos;s your trading overview</p>
         </div>
+
+        {/* Critical announcements */}
+        <CriticalAnnouncementBanner token={token} />
 
         {/* Subscription status */}
         <SubscriptionCountdown

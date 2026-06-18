@@ -7,3 +7,7 @@ export * from "./strategies";
 export * from "./bindings";
 export * from "./tradeLogs";
 export * from "./adminSettings";
+export * from "./mediaUploads";
+export * from "./newsArticles";
+export * from "./learningResources";
+export * from "./announcements";

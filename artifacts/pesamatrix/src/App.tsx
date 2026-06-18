@@ -14,6 +14,13 @@ import StrategiesPage from "@/pages/strategies";
 import BindingsPage from "@/pages/bindings";
 import TradeLogsPage from "@/pages/trade-logs";
 import AdminPage from "@/pages/admin/index";
+import NewsPage from "@/pages/news";
+import ResourcesPage from "@/pages/resources";
+import AnnouncementsPage from "@/pages/announcements";
+import AdminMediaCenterPage from "@/pages/admin/media-center";
+import AdminNewsPage from "@/pages/admin/news-admin";
+import AdminResourcesPage from "@/pages/admin/resources-admin";
+import AdminAnnouncementsPage from "@/pages/admin/announcements-admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +52,13 @@ function Router() {
       <Route path="/bindings" component={BindingsPage} />
       <Route path="/trade-logs" component={TradeLogsPage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/news" component={NewsPage} />
+      <Route path="/resources" component={ResourcesPage} />
+      <Route path="/announcements" component={AnnouncementsPage} />
+      <Route path="/admin/media-center" component={AdminMediaCenterPage} />
+      <Route path="/admin/news" component={AdminNewsPage} />
+      <Route path="/admin/resources" component={AdminResourcesPage} />
+      <Route path="/admin/announcements" component={AdminAnnouncementsPage} />
       <Route component={NotFound} />
     </Switch>
   );
