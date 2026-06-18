@@ -145,7 +145,7 @@ router.get("/admin/payments", authenticate, requireAdmin, async (_req, res): Pro
 });
 
 router.get("/admin/settings", authenticate, requireAdmin, async (_req, res): Promise<void> => {
-  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+  const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
   if (!settings) {
     const [created] = await db
       .insert(adminSettingsTable)
@@ -164,7 +164,7 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
     return;
   }
 
-  const [existing] = await db.select().from(adminSettingsTable).limit(1);
+  const [existing] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
   const updates: Partial<typeof adminSettingsTable.$inferInsert> = {};
   if (parsed.data.dailyFee != null) updates.dailyFee = parsed.data.dailyFee.toString();
   if (parsed.data.minDays != null) updates.minDays = parsed.data.minDays;
@@ -325,7 +325,7 @@ router.post("/admin/scheduler/run", authenticate, requireAdmin, async (_req, res
 });
 
 router.get("/admin/integration-status", authenticate, requireAdmin, async (_req, res): Promise<void> => {
-  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+  const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
 
   const metaApiToken = !!(settings?.metaApiToken ?? process.env.METAAPI_TOKEN);
   const consumerKey = !!process.env.MPESA_CONSUMER_KEY;

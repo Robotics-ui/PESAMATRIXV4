@@ -9,7 +9,7 @@ import { syncSlaveSubscriberToCopyFactory } from "../lib/metaapi";
 const router = Router();
 
 async function getDailyFee(): Promise<number> {
-  const [settings] = await db.select().from(adminSettingsTable).limit(1);
+  const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
   return settings ? parseFloat(settings.dailyFee as string) : 100;
 }
 

@@ -1,10 +1,21 @@
-import { eq } from "drizzle-orm";
-import { db, usersTable, subscriptionsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
+import { db, usersTable, subscriptionsTable, adminSettingsTable } from "@workspace/db";
 import { hashPassword } from "./auth";
 import { logger } from "./logger";
 
 export async function seedDefaultAccounts(): Promise<void> {
   try {
+    // Seed admin_settings — exactly one row, never duplicate
+    await db
+      .insert(adminSettingsTable)
+      .values({ dailyFee: "100", minDays: 1, maxDays: 365 })
+      .onConflictDoNothing();
+
+    // Delete any accidental extra rows, keep only the lowest id
+    await db.execute(
+      sql`DELETE FROM admin_settings WHERE id NOT IN (SELECT MIN(id) FROM admin_settings)`
+    );
+
     const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, "admin@pesamatrix.com"));
     if (existing.length > 0) return;
 

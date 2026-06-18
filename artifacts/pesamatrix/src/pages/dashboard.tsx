@@ -1,6 +1,6 @@
 import { AppLayout } from "@/components/layout/app-layout";
 import { useAuth } from "@/hooks/use-auth";
-import { useGetDashboardSummary, useGetMySubscription } from "@workspace/api-client-react";
+import { useGetDashboardSummary, useGetMySubscription, useGetAdminSettings } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -69,6 +69,11 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { data: summary, isLoading } = useGetDashboardSummary();
   const { data: subscription } = useGetMySubscription();
+  const { data: settings } = useGetAdminSettings();
+
+  const dailyFee = settings?.dailyFee ?? 100;
+  const minDays = settings?.minDays ?? 1;
+  const maxDays = settings?.maxDays ?? 365;
 
   const stats = [
     { label: "Master Accounts", value: summary?.masterAccounts ?? 0, icon: Server, color: "blue" },
@@ -159,6 +164,17 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Pricing info — always visible */}
+              <div className="mb-3 pb-3 border-b border-border">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Rate</span>
+                  <span className="text-blue-400 font-semibold">KES {dailyFee.toFixed(0)} / trading day</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-muted-foreground">Plans available</span>
+                  <span className="text-foreground">{minDays}–{maxDays} days</span>
+                </div>
+              </div>
               {subscription ? (
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
@@ -191,13 +207,19 @@ export default function DashboardPage() {
                       <span className="text-foreground">{subscription.daysPaid} trading days</span>
                     </div>
                   )}
+                  {subscription.daysPaid != null && (
+                    <div className="flex justify-between text-sm font-medium">
+                      <span className="text-muted-foreground">Total paid</span>
+                      <span className="text-foreground">KES {(subscription.daysPaid * dailyFee).toFixed(0)}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="flex flex-col items-center py-6 text-center space-y-2">
+                <div className="flex flex-col items-center py-4 text-center space-y-2">
                   <CreditCard className="h-8 w-8 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">No active subscription</p>
                   <Link href="/payment">
-                    <Button size="sm" className="mt-2 bg-blue-600 hover:bg-blue-700">Subscribe</Button>
+                    <Button size="sm" className="mt-2 bg-blue-600 hover:bg-blue-700">Subscribe Now</Button>
                   </Link>
                 </div>
               )}
