@@ -249,7 +249,7 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
 });
 
 router.get("/payments/callback", (_req, res): void => {
-  res.redirect("/");
+  res.status(200).json({ ResultCode: 0, ResultDesc: "Accepted" });
 });
 
 router.post("/payments/callback", async (req, res): Promise<void> => {
