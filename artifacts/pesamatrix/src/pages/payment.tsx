@@ -9,11 +9,12 @@ import {
   useVerifyPayment,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Smartphone, Clock, CreditCard, Info, Loader2, RefreshCw, ListOrdered } from "lucide-react";
+import { AlertCircle, CheckCircle2, Smartphone, Clock, CreditCard, Info, Loader2, RefreshCw, ListOrdered, HelpCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetMySubscriptionQueryKey } from "@workspace/api-client-react";
 
@@ -475,6 +476,65 @@ export default function PaymentPage() {
             </CardContent>
           </Card>
         )}
+        {/* FAQ */}
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <HelpCircle className="h-4 w-4 text-blue-400" />
+              Frequently Asked Questions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Accordion type="multiple" className="w-full">
+              {[
+                {
+                  id: "faq-1",
+                  q: "What happens if my payment fails?",
+                  a: "If the payment fails or you cancel the M-Pesa prompt, no money is deducted and your subscription remains unchanged. Simply tap Pay again to retry. Check your M-Pesa balance and ensure your account is active before retrying.",
+                },
+                {
+                  id: "faq-2",
+                  q: "Why didn't I receive the STK Push on my phone?",
+                  a: "Make sure the number you entered is the exact Safaricom number registered for M-Pesa, and that your phone has network coverage. If the prompt still doesn't appear within 30 seconds, tap the Pay button again. You can also use the I Have Paid — Check Now button if you already paid via the M-Pesa app.",
+                },
+                {
+                  id: "faq-3",
+                  q: "How do I extend my subscription before it expires?",
+                  a: "You can top up at any time. If you still have days remaining, new days are added on top of your current expiry date — you never lose existing time. Just select the number of extra days you want and pay.",
+                },
+                {
+                  id: "faq-4",
+                  q: "What is a trading day?",
+                  a: "A trading day is any weekday (Monday to Friday) that the forex market is open. Saturdays and Sundays are not counted. For example, if you subscribe on a Friday for 5 trading days, your subscription covers the following Monday through Friday.",
+                },
+                {
+                  id: "faq-5",
+                  q: "What happens to my copy trades when my subscription expires?",
+                  a: "When your subscription expires all your active bindings are automatically suspended and copy trading stops. Your account settings and history are preserved. Once you renew, all bindings are reactivated and copy trading resumes.",
+                },
+                {
+                  id: "faq-6",
+                  q: "Can I use a different M-Pesa number to pay?",
+                  a: "Yes. You can pay from any Safaricom M-Pesa number — it does not have to match the phone number on your account. Enter the number you want to pay from in the M-Pesa Phone Number field.",
+                },
+                {
+                  id: "faq-7",
+                  q: "How do I know my payment was successful?",
+                  a: "You will see a green Payment Confirmed notification on this page, and your subscription status on the dashboard will update immediately. Safaricom will also send you an SMS receipt to your phone.",
+                },
+              ].map(({ id, q, a }) => (
+                <AccordionItem key={id} value={id} className="border-border last:border-0">
+                  <AccordionTrigger className="text-sm font-medium text-foreground hover:no-underline">
+                    {q}
+                  </AccordionTrigger>
+                  <AccordionContent className="text-xs text-muted-foreground leading-relaxed">
+                    {a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
