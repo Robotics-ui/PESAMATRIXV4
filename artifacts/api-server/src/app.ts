@@ -10,6 +10,8 @@ import { startScheduler } from "./lib/scheduler";
 import { startAccountPoller } from "./lib/accountPoller";
 import { startReconnectWorker } from "./lib/reconnectWorker";
 import { seedDefaultAccounts } from "./lib/seed";
+import { startSmsWorker } from "./lib/smsWorker";
+import { seedDefaultTemplates } from "./lib/smsService";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -95,5 +97,9 @@ startScheduler();
 startAccountPoller();
 // Start MetaApi reconnect worker (every 5min)
 startReconnectWorker();
+// Start SMS queue worker (every minute)
+startSmsWorker();
+// Seed default SMS templates
+void seedDefaultTemplates();
 
 export default app;

@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
+import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
 import { invalidateMetaApiTokenCache } from "../lib/metaapi";
 import { getSchedulerStatus, runEnforcementTick } from "../lib/scheduler";
 import { runPollerNow } from "../lib/accountPoller";
@@ -113,6 +114,9 @@ router.patch("/admin/users/:id/suspend", authenticate, requireAdmin, async (req,
 
   const sub = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, user.id));
   const s = sub[0];
+
+  // SMS: account suspended
+  if (user.phone) notifyAccountSuspended({ userId: user.id, phone: user.phone, name: user.name });
 
   res.json({
     id: user.id,
@@ -276,6 +280,10 @@ router.post("/admin/master-accounts/:id/approve", authenticate, requireAdmin, as
     })
     .where(eq(masterAccountsTable.id, account.id))
     .returning();
+
+  // SMS: master account approved
+  const [acctOwner] = await db.select().from(usersTable).where(eq(usersTable.id, account.userId)).limit(1);
+  if (acctOwner?.phone) notifyMasterAccountApproved({ userId: account.userId, phone: acctOwner.phone, name: acctOwner.name, accountId: String(account.mt5Login) });
 
   res.json({ ...serializeAccount(updated), userEmail: null, userName: null });
 });

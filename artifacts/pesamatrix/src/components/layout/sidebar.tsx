@@ -20,6 +20,7 @@ import {
   Info,
   Phone,
   Activity,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -36,6 +37,7 @@ const navItems = [
   { href: "/announcements", label: "Announcements", icon: Bell },
   { href: "/about", label: "About Us", icon: Info },
   { href: "/contacts", label: "Contacts", icon: Phone },
+  { href: "/settings/notifications", label: "SMS Preferences", icon: Bell },
 ];
 
 const adminNavItems = [
@@ -45,6 +47,7 @@ const adminNavItems = [
   { href: "/admin/news", label: "Trading News", icon: Newspaper },
   { href: "/admin/resources", label: "Resources", icon: BookOpen },
   { href: "/admin/announcements", label: "Announcements", icon: Bell },
+  { href: "/admin/sms", label: "Bulk SMS", icon: MessageSquare },
 ];
 
 export function Sidebar() {

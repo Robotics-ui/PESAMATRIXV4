@@ -1,8 +1,9 @@
 import cron from "node-cron";
 import { eq, inArray, and, gt } from "drizzle-orm";
-import { db, subscriptionsTable, slaveAccountsTable, bindingsTable } from "@workspace/db";
+import { db, subscriptionsTable, slaveAccountsTable, bindingsTable, usersTable } from "@workspace/db";
 import { logger } from "./logger";
 import { syncSlaveSubscriberToCopyFactory } from "./metaapi";
+import { notifySubscriptionExpired, notifySubscriptionExpiring } from "./smsNotifier";
 
 // ─── In-memory status store ────────────────────────────────────────────────
 
@@ -141,6 +142,12 @@ export async function runEnforcementTick(): Promise<void> {
             .update(subscriptionsTable)
             .set({ status: "expired" })
             .where(eq(subscriptionsTable.id, sub.id));
+
+          // SMS: subscription expired
+          const [expiredUser] = await db.select().from(usersTable).where(eq(usersTable.id, sub.userId)).limit(1);
+          if (expiredUser?.phone) {
+            notifySubscriptionExpired({ userId: sub.userId, phone: expiredUser.phone, name: expiredUser.name });
+          }
 
           const slaveAccounts = await db
             .select()

@@ -13,3 +13,8 @@ export * from "./learningResources";
 export * from "./announcements";
 export * from "./bannerSettings";
 export * from "./passwordResetTokens";
+export * from "./smsSettings";
+export * from "./smsTemplates";
+export * from "./smsQueue";
+export * from "./smsLogs";
+export * from "./notificationPreferences";

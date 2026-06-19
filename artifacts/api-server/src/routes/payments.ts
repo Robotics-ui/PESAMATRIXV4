@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { eq, desc } from "drizzle-orm";
-import { db, paymentsTable, subscriptionsTable, adminSettingsTable, bindingsTable, slaveAccountsTable } from "@workspace/db";
+import { db, paymentsTable, subscriptionsTable, adminSettingsTable, bindingsTable, slaveAccountsTable, usersTable } from "@workspace/db";
 import { InitiatePaymentBody } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
 import { logger } from "../lib/logger";
 import { syncSlaveSubscriberToCopyFactory } from "../lib/metaapi";
+import { notifyPaymentReceived, notifySubscriptionActivated } from "../lib/smsNotifier";
 
 const router = Router();
 
@@ -105,6 +106,14 @@ router.post("/payments", authenticate, async (req, res): Promise<void> => {
 
     // Activate subscription
     await activateSubscription(req.userId!, days);
+
+    // SMS: notify payment received + subscription activated
+    const [userForSms] = await db.select().from(usersTable).where(eq(usersTable.id, req.userId!)).limit(1);
+    if (userForSms?.phone) {
+      const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, req.userId!)).limit(1);
+      notifyPaymentReceived({ userId: req.userId!, phone: userForSms.phone, name: userForSms.name, amount: amount.toFixed(2), receipt: payment.mpesaReceipt ?? "DEMO" });
+      if (sub?.endDate) notifySubscriptionActivated({ userId: req.userId!, phone: userForSms.phone, name: userForSms.name, endDate: sub.endDate.toDateString() });
+    }
 
     res.json({
       checkoutRequestId: payment.checkoutRequestId!,
@@ -304,6 +313,14 @@ router.post("/payments/callback", async (req, res): Promise<void> => {
         .where(eq(paymentsTable.id, payment.id));
 
       await activateSubscription(payment.userId, payment.days);
+
+      // SMS: payment received + subscription activated
+      const [cbUser] = await db.select().from(usersTable).where(eq(usersTable.id, payment.userId)).limit(1);
+      if (cbUser?.phone) {
+        const [cbSub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, payment.userId)).limit(1);
+        notifyPaymentReceived({ userId: payment.userId, phone: cbUser.phone, name: cbUser.name, amount: parseFloat(payment.amount as string).toFixed(2), receipt: mpesaReceipt ?? "" });
+        if (cbSub?.endDate) notifySubscriptionActivated({ userId: payment.userId, phone: cbUser.phone, name: cbUser.name, endDate: cbSub.endDate.toDateString() });
+      }
     } else {
       await db.update(paymentsTable).set({ status: "failed" }).where(eq(paymentsTable.id, payment.id));
     }
