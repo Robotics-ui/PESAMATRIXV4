@@ -184,10 +184,13 @@ export type MasterAccountStatus = typeof MasterAccountStatus[keyof typeof Master
 
 export const MasterAccountStatus = {
   pending_approval: 'pending_approval',
+  pending: 'pending',
   deploying: 'deploying',
   connecting: 'connecting',
+  synchronizing: 'synchronizing',
   connected: 'connected',
   disconnected: 'disconnected',
+  failed: 'failed',
   error: 'error',
   rejected: 'rejected',
 } as const;
@@ -206,7 +209,15 @@ export interface MasterAccount {
   /** @nullable */
   connectionStatus?: string | null;
   /** @nullable */
+  synchronizationStatus?: string | null;
+  /** @nullable */
+  lastErrorMessage?: string | null;
+  /** @nullable */
+  metaapiRegion?: string | null;
+  /** @nullable */
   rejectionReason?: string | null;
+  /** @nullable */
+  lastCheckedAt?: string | null;
   createdAt: string;
 }
 
@@ -228,11 +239,14 @@ export type SlaveAccountStatus = typeof SlaveAccountStatus[keyof typeof SlaveAcc
 
 
 export const SlaveAccountStatus = {
+  pending: 'pending',
   deploying: 'deploying',
   connecting: 'connecting',
+  synchronizing: 'synchronizing',
   connected: 'connected',
   disconnected: 'disconnected',
   suspended: 'suspended',
+  failed: 'failed',
   error: 'error',
 } as const;
 
@@ -251,6 +265,14 @@ export interface SlaveAccount {
   deploymentStatus?: string | null;
   /** @nullable */
   connectionStatus?: string | null;
+  /** @nullable */
+  synchronizationStatus?: string | null;
+  /** @nullable */
+  lastErrorMessage?: string | null;
+  /** @nullable */
+  metaapiRegion?: string | null;
+  /** @nullable */
+  lastCheckedAt?: string | null;
   createdAt: string;
 }
 

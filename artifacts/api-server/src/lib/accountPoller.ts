@@ -1,6 +1,6 @@
 import { inArray, isNotNull, and, eq } from "drizzle-orm";
 import { db, masterAccountsTable, slaveAccountsTable } from "@workspace/db";
-import { getMetaApiToken, mapMetaApiState } from "./metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState } from "./metaapi";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
@@ -12,28 +12,47 @@ const NON_TERMINAL_STATUSES = ["deploying", "connecting", "synchronizing"];
 let pollerRunning = false;
 let pollCount = 0;
 
+type MetaApiAccountResponse = {
+  state?: string;
+  connectionStatus?: string;
+  synchronizationStatus?: string;
+  region?: string;
+  message?: string;
+};
+
 async function checkSingleMasterAccount(
   id: number,
   metaapiAccountId: string,
   token: string
 ): Promise<void> {
   try {
-    const response = await fetch(`${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`, {
-      headers: { "auth-token": token },
-    });
-    if (!response.ok) return;
-    const data = (await response.json()) as { state?: string; connectionStatus?: string };
+    const result = await callMetaApi<MetaApiAccountResponse>(
+      "GET",
+      `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`,
+      token
+    );
+    if (!result.ok) return;
+
+    const data = result.data;
     const newStatus = mapMetaApiState(data.state ?? "");
+
     await db
       .update(masterAccountsTable)
       .set({
         status: newStatus,
         deploymentStatus: data.state ?? null,
         connectionStatus: data.connectionStatus ?? null,
+        synchronizationStatus: data.synchronizationStatus ?? null,
+        metaapiRegion: data.region ?? null,
+        lastErrorMessage: newStatus === "failed" ? (data.message ?? "Account in FAILED state") : null,
         lastCheckedAt: new Date(),
       })
       .where(eq(masterAccountsTable.id, id));
-    logger.debug({ id, metaapiAccountId, state: data.state, newStatus }, "Master account polled");
+
+    logger.debug(
+      { id, metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus, synchronizationStatus: data.synchronizationStatus, newStatus },
+      "Master account polled"
+    );
   } catch (err) {
     logger.warn({ id, metaapiAccountId, err }, "Failed to poll master account");
   }
@@ -45,22 +64,33 @@ async function checkSingleSlaveAccount(
   token: string
 ): Promise<void> {
   try {
-    const response = await fetch(`${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`, {
-      headers: { "auth-token": token },
-    });
-    if (!response.ok) return;
-    const data = (await response.json()) as { state?: string; connectionStatus?: string };
+    const result = await callMetaApi<MetaApiAccountResponse>(
+      "GET",
+      `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`,
+      token
+    );
+    if (!result.ok) return;
+
+    const data = result.data;
     const newStatus = mapMetaApiState(data.state ?? "");
+
     await db
       .update(slaveAccountsTable)
       .set({
         status: newStatus,
         deploymentStatus: data.state ?? null,
         connectionStatus: data.connectionStatus ?? null,
+        synchronizationStatus: data.synchronizationStatus ?? null,
+        metaapiRegion: data.region ?? null,
+        lastErrorMessage: newStatus === "failed" ? (data.message ?? "Account in FAILED state") : null,
         lastCheckedAt: new Date(),
       })
       .where(eq(slaveAccountsTable.id, id));
-    logger.debug({ id, metaapiAccountId, state: data.state, newStatus }, "Slave account polled");
+
+    logger.debug(
+      { id, metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus, synchronizationStatus: data.synchronizationStatus, newStatus },
+      "Slave account polled"
+    );
   } catch (err) {
     logger.warn({ id, metaapiAccountId, err }, "Failed to poll slave account");
   }

@@ -253,10 +253,14 @@ export const ListMasterAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListMasterAccountsResponse = zod.array(ListMasterAccountsResponseItem)
@@ -287,10 +291,14 @@ export const GetMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -317,10 +325,14 @@ export const RefreshMasterAccountStatusResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -336,9 +348,13 @@ export const ListSlaveAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['deploying', 'connecting', 'connected', 'disconnected', 'suspended', 'error']),
+  "status": zod.enum(['pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'suspended', 'failed', 'error']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListSlaveAccountsResponse = zod.array(ListSlaveAccountsResponseItem)
@@ -378,9 +394,13 @@ export const RefreshSlaveAccountStatusResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['deploying', 'connecting', 'connected', 'disconnected', 'suspended', 'error']),
+  "status": zod.enum(['pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'suspended', 'failed', 'error']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -537,10 +557,14 @@ export const ListAdminMasterAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),
@@ -563,10 +587,14 @@ export const ApproveMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),
@@ -592,10 +620,14 @@ export const RejectMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'deploying', 'connecting', 'connected', 'disconnected', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
+  "synchronizationStatus": zod.string().nullish(),
+  "lastErrorMessage": zod.string().nullish(),
+  "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),

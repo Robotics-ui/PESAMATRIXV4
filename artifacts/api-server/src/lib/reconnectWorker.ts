@@ -1,29 +1,40 @@
-import { inArray, isNotNull, and, or, isNull, lt } from "drizzle-orm";
+import { inArray, isNotNull, and, or, isNull, lt, eq } from "drizzle-orm";
 import { db, masterAccountsTable, slaveAccountsTable } from "@workspace/db";
-import { getMetaApiToken } from "./metaapi";
+import { getMetaApiToken, callMetaApi } from "./metaapi";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
 const RECONNECT_INTERVAL_MS = 5 * 60 * 1000;
 const STALE_THRESHOLD_MS = 10 * 60 * 1000;
 
-async function attemptRedeploy(metaapiAccountId: string, token: string, label: string): Promise<void> {
+async function attemptRedeploy(
+  metaapiAccountId: string,
+  token: string,
+  label: string,
+  updateStatus: (status: string, errMsg: string | null) => Promise<void>
+): Promise<void> {
   try {
-    const response = await fetch(
+    const result = await callMetaApi(
+      "POST",
       `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}/deploy`,
-      { method: "POST", headers: { "auth-token": token } }
+      token
     );
-    if (response.ok || response.status === 204) {
+    if (result.ok || result.status === 204) {
       logger.info({ metaapiAccountId, label }, "Reconnect worker: deploy retried");
+      await updateStatus("deploying", null);
     } else {
-      const body = await response.text().catch(() => "");
+      const body = result.data as { message?: string } | null;
+      const errMsg = body?.message ?? `Deploy HTTP ${result.status}`;
       logger.warn(
-        { metaapiAccountId, label, status: response.status, body },
+        { metaapiAccountId, label, httpStatus: result.status, body: result.data },
         "Reconnect worker: deploy retry returned non-OK"
       );
+      await updateStatus("failed", `Retry failed: ${errMsg}`);
     }
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.error({ metaapiAccountId, label, err }, "Reconnect worker: deploy retry error");
+    await updateStatus("failed", `Retry error: ${msg}`);
   }
 }
 
@@ -34,6 +45,7 @@ async function runReconnectTick(): Promise<void> {
 
     const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
 
+    // ── Reconnect: DISCONNECTED accounts stale > 10 min ──────────────────
     const disconnectedMasters = await db
       .select()
       .from(masterAccountsTable)
@@ -56,8 +68,9 @@ async function runReconnectTick(): Promise<void> {
         )
       );
 
+    // ── Retry: FAILED accounts with a MetaApi ID (credentials may be updated) ──
     const failedMasters = await db
-      .select({ id: masterAccountsTable.id, metaapiAccountId: masterAccountsTable.metaapiAccountId })
+      .select()
       .from(masterAccountsTable)
       .where(
         and(
@@ -67,7 +80,7 @@ async function runReconnectTick(): Promise<void> {
       );
 
     const failedSlaves = await db
-      .select({ id: slaveAccountsTable.id, metaapiAccountId: slaveAccountsTable.metaapiAccountId })
+      .select()
       .from(slaveAccountsTable)
       .where(
         and(
@@ -76,35 +89,44 @@ async function runReconnectTick(): Promise<void> {
         )
       );
 
-    if (failedMasters.length > 0) {
-      logger.warn(
-        { count: failedMasters.length, ids: failedMasters.map((a) => a.id) },
-        "Reconnect worker: master accounts in FAILED state — check credentials / broker server"
-      );
-    }
-    if (failedSlaves.length > 0) {
-      logger.warn(
-        { count: failedSlaves.length, ids: failedSlaves.map((a) => a.id) },
-        "Reconnect worker: slave accounts in FAILED state — check credentials / broker server"
-      );
-    }
-
     for (const acc of disconnectedMasters) {
       logger.info({ id: acc.id, metaapiAccountId: acc.metaapiAccountId }, "Reconnect worker: retrying disconnected master");
-      await attemptRedeploy(acc.metaapiAccountId!, token, `master-${acc.id}`);
+      await attemptRedeploy(acc.metaapiAccountId!, token, `master-${acc.id}`, async (s, e) => {
+        await db.update(masterAccountsTable).set({ status: s, lastErrorMessage: e }).where(eq(masterAccountsTable.id, acc.id));
+      });
     }
 
     for (const acc of disconnectedSlaves) {
       logger.info({ id: acc.id, metaapiAccountId: acc.metaapiAccountId }, "Reconnect worker: retrying disconnected slave");
-      await attemptRedeploy(acc.metaapiAccountId!, token, `slave-${acc.id}`);
+      await attemptRedeploy(acc.metaapiAccountId!, token, `slave-${acc.id}`, async (s, e) => {
+        await db.update(slaveAccountsTable).set({ status: s, lastErrorMessage: e }).where(eq(slaveAccountsTable.id, acc.id));
+      });
     }
 
-    const totalActioned = disconnectedMasters.length + disconnectedSlaves.length;
-    const totalFailed = failedMasters.length + failedSlaves.length;
+    for (const acc of failedMasters) {
+      logger.info({ id: acc.id, metaapiAccountId: acc.metaapiAccountId }, "Reconnect worker: retrying FAILED master");
+      await attemptRedeploy(acc.metaapiAccountId!, token, `master-failed-${acc.id}`, async (s, e) => {
+        await db.update(masterAccountsTable).set({ status: s, lastErrorMessage: e }).where(eq(masterAccountsTable.id, acc.id));
+      });
+    }
 
-    if (totalActioned > 0 || totalFailed > 0) {
+    for (const acc of failedSlaves) {
+      logger.info({ id: acc.id, metaapiAccountId: acc.metaapiAccountId }, "Reconnect worker: retrying FAILED slave");
+      await attemptRedeploy(acc.metaapiAccountId!, token, `slave-failed-${acc.id}`, async (s, e) => {
+        await db.update(slaveAccountsTable).set({ status: s, lastErrorMessage: e }).where(eq(slaveAccountsTable.id, acc.id));
+      });
+    }
+
+    const totalActioned =
+      disconnectedMasters.length + disconnectedSlaves.length +
+      failedMasters.length + failedSlaves.length;
+
+    if (totalActioned > 0) {
       logger.info(
-        { retried: totalActioned, failed: totalFailed },
+        {
+          reconnectedDisconnected: disconnectedMasters.length + disconnectedSlaves.length,
+          retriedFailed: failedMasters.length + failedSlaves.length,
+        },
         "Reconnect worker tick completed"
       );
     }

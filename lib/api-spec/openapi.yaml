@@ -1265,13 +1265,22 @@ components:
           type: string
         status:
           type: string
-          enum: [pending_approval, deploying, connecting, connected, disconnected, error, rejected]
+          enum: [pending_approval, pending, deploying, connecting, synchronizing, connected, disconnected, failed, error, rejected]
         deploymentStatus:
           type: ["string", "null"]
         connectionStatus:
           type: ["string", "null"]
+        synchronizationStatus:
+          type: ["string", "null"]
+        lastErrorMessage:
+          type: ["string", "null"]
+        metaapiRegion:
+          type: ["string", "null"]
         rejectionReason:
           type: ["string", "null"]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -1320,11 +1329,20 @@ components:
           type: string
         status:
           type: string
-          enum: [deploying, connecting, connected, disconnected, suspended, error]
+          enum: [pending, deploying, connecting, synchronizing, connected, disconnected, suspended, failed, error]
         deploymentStatus:
           type: ["string", "null"]
         connectionStatus:
           type: ["string", "null"]
+        synchronizationStatus:
+          type: ["string", "null"]
+        lastErrorMessage:
+          type: ["string", "null"]
+        metaapiRegion:
+          type: ["string", "null"]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time

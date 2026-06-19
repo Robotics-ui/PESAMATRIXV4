@@ -14,6 +14,9 @@ export const masterAccountsTable = pgTable("master_accounts", {
   deploymentStatus: text("deployment_status"),
   connectionStatus: text("connection_status"),
   rejectionReason: text("rejection_reason"),
+  synchronizationStatus: text("synchronization_status"),
+  lastErrorMessage: text("last_error_message"),
+  metaapiRegion: text("metaapi_region"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

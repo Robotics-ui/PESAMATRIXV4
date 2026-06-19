@@ -270,6 +270,8 @@ router.post("/admin/master-accounts/:id/approve", authenticate, requireAdmin, as
       metaapiAccountId: deployed.metaapiAccountId,
       status: deployed.status,
       deploymentStatus: deployed.deploymentStatus,
+      lastErrorMessage: deployed.lastErrorMessage,
+      metaapiRegion: deployed.metaapiRegion,
       rejectionReason: null,
     })
     .where(eq(masterAccountsTable.id, account.id))
@@ -376,6 +378,7 @@ router.get("/admin/diagnostics", authenticate, requireAdmin, async (_req, res): 
         disconnected: countBy(masters, "disconnected"),
         failed: countBy(masters, "failed"),
         pending_approval: countBy(masters, "pending_approval"),
+        pending: countBy(masters, "pending"),
         rejected: countBy(masters, "rejected"),
       },
       slaves: {
@@ -387,6 +390,7 @@ router.get("/admin/diagnostics", authenticate, requireAdmin, async (_req, res): 
         disconnected: countBy(slaves, "disconnected"),
         failed: countBy(slaves, "failed"),
         suspended: countBy(slaves, "suspended"),
+        pending: countBy(slaves, "pending"),
       },
     },
     masters: masters.map((a) => ({
@@ -425,7 +429,7 @@ router.get("/admin/integration-status", authenticate, requireAdmin, async (_req,
 });
 
 router.post("/admin/users/:id/generate-reset-link", authenticate, requireAdmin, async (req, res): Promise<void> => {
-  const userId = parseInt(req.params.id);
+  const userId = parseInt(req.params.id as string);
   if (isNaN(userId)) {
     res.status(400).json({ error: "Invalid user ID" });
     return;

@@ -4,7 +4,7 @@ import { db, slaveAccountsTable, subscriptionsTable } from "@workspace/db";
 import { CreateSlaveAccountBody, DeleteSlaveAccountParams, RefreshSlaveAccountStatusParams } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
 import { encryptCredential } from "../lib/auth";
-import { getMetaApiToken, mapMetaApiState } from "../lib/metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState } from "../lib/metaapi";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -12,23 +12,30 @@ const router = Router();
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
 
 type MetaApiAccountState = {
-  id: string;
-  state: string;
-  connectionStatus: string;
+  id?: string;
+  state?: string;
+  connectionStatus?: string;
+  synchronizationStatus?: string;
+  region?: string;
+  message?: string;
 };
 
 export function serializeAccount(a: typeof slaveAccountsTable.$inferSelect) {
   return {
     id: a.id,
     userId: a.userId,
-    metaapiAccountId: a.metaapiAccountId,
-    subscriberId: a.subscriberId,
+    metaapiAccountId: a.metaapiAccountId ?? null,
+    subscriberId: a.subscriberId ?? null,
     mt5Login: a.mt5Login,
     broker: a.broker,
     server: a.server,
     status: a.status,
     deploymentStatus: a.deploymentStatus ?? null,
     connectionStatus: a.connectionStatus ?? null,
+    synchronizationStatus: a.synchronizationStatus ?? null,
+    lastErrorMessage: a.lastErrorMessage ?? null,
+    metaapiRegion: a.metaapiRegion ?? null,
+    lastCheckedAt: a.lastCheckedAt ?? null,
     createdAt: a.createdAt,
   };
 }
@@ -63,62 +70,73 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
 
   let metaapiAccountId: string | null = null;
   let subscriberId: string | null = null;
-  let status = "connecting";
+  let status = "pending";
   let deploymentStatus: string | null = null;
   let connectionStatus: string | null = null;
+  let synchronizationStatus: string | null = null;
+  let lastErrorMessage: string | null = null;
+  let metaapiRegion: string | null = null;
 
   const metaapiToken = await getMetaApiToken();
-  if (metaapiToken) {
+  if (!metaapiToken) {
+    lastErrorMessage = "MetaApi token is not configured. The account will be deployed once the token is added in Admin → Settings.";
+    logger.warn({ mt5Login, userId: req.userId }, "MetaApi token not set — slave account created in pending state");
+  } else {
     try {
-      // Step 1: Create the MetaApi account
-      const createResponse = await fetch(`${PROVISIONING_API}/users/current/accounts`, {
-        method: "POST",
-        headers: {
-          "auth-token": metaapiToken,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // ── Step 1: Create the MetaApi account ──────────────────────────────
+      const createResult = await callMetaApi<MetaApiAccountState>(
+        "POST",
+        `${PROVISIONING_API}/users/current/accounts`,
+        metaapiToken,
+        {
           login: mt5Login,
           password: investorPassword,
           server,
           name: `${broker}-${mt5Login}-slave`,
           platform: "mt5",
           type: "cloud-g2",
-        }),
-      });
+        }
+      );
 
-      const createData = (await createResponse.json()) as { id?: string; message?: string };
-
-      if (!createData.id) {
-        logger.warn({ createData }, "MetaApi slave account creation returned no ID");
-        status = "error";
+      if (!createResult.ok || !createResult.data.id) {
+        const errMsg =
+          (typeof createResult.data === "object" && createResult.data !== null
+            ? (createResult.data as { message?: string }).message
+            : String(createResult.data)) ??
+          `HTTP ${createResult.status}`;
+        logger.error({ httpStatus: createResult.status, body: createResult.data }, "MetaApi slave account creation failed");
+        status = "failed";
+        lastErrorMessage = `Account creation failed: ${errMsg}`;
       } else {
-        metaapiAccountId = createData.id;
-        subscriberId = createData.id;
-        logger.info({ metaapiAccountId }, "MetaApi slave account created");
+        metaapiAccountId = createResult.data.id!;
+        subscriberId = metaapiAccountId;
+        metaapiRegion = createResult.data.region ?? null;
+        logger.info({ metaapiAccountId, region: metaapiRegion }, "MetaApi slave account created in MetaApi");
 
-        // Step 2: Deploy the account so MetaApi connects it to the broker
-        const deployResponse = await fetch(
+        // ── Step 2: Deploy the account ──────────────────────────────────
+        const deployResult = await callMetaApi(
+          "POST",
           `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}/deploy`,
-          {
-            method: "POST",
-            headers: { "auth-token": metaapiToken },
-          }
+          metaapiToken
         );
 
-        if (deployResponse.ok || deployResponse.status === 204) {
+        if (deployResult.ok || deployResult.status === 204) {
           logger.info({ metaapiAccountId }, "MetaApi slave account deploy triggered");
           status = "deploying";
           deploymentStatus = "DEPLOYING";
         } else {
-          const deployData = (await deployResponse.json().catch(() => ({}))) as { message?: string };
-          logger.warn({ metaapiAccountId, deployData }, "MetaApi slave deploy returned non-OK");
-          status = "connecting";
+          const deployData = deployResult.data as { message?: string } | null;
+          const errMsg = deployData?.message ?? `Deploy HTTP ${deployResult.status}`;
+          logger.error({ metaapiAccountId, httpStatus: deployResult.status, body: deployResult.data }, "MetaApi slave deploy call failed");
+          status = "failed";
+          lastErrorMessage = `Deploy failed: ${errMsg}`;
         }
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err }, "MetaApi slave account creation/deploy error");
-      status = "error";
+      status = "failed";
+      lastErrorMessage = `Network error: ${msg}`;
     }
   }
 
@@ -135,6 +153,9 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
       status,
       deploymentStatus,
       connectionStatus,
+      synchronizationStatus,
+      lastErrorMessage,
+      metaapiRegion,
     })
     .returning();
 
@@ -170,17 +191,18 @@ router.get("/slave-accounts/:id/refresh-status", authenticate, async (req, res):
   }
 
   try {
-    const response = await fetch(
+    const result = await callMetaApi<MetaApiAccountState>(
+      "GET",
       `${PROVISIONING_API}/users/current/accounts/${account.metaapiAccountId}`,
-      { headers: { "auth-token": metaapiToken } }
+      metaapiToken
     );
 
-    if (!response.ok) {
+    if (!result.ok) {
       res.json(serializeAccount(account));
       return;
     }
 
-    const data = (await response.json()) as MetaApiAccountState;
+    const data = result.data;
     const newStatus = mapMetaApiState(data.state ?? "");
 
     const [updated] = await db
@@ -189,13 +211,23 @@ router.get("/slave-accounts/:id/refresh-status", authenticate, async (req, res):
         status: newStatus,
         deploymentStatus: data.state ?? null,
         connectionStatus: data.connectionStatus ?? null,
+        synchronizationStatus: data.synchronizationStatus ?? null,
+        metaapiRegion: data.region ?? null,
+        lastErrorMessage: newStatus === "failed" ? (data.message ?? "Account in FAILED state") : null,
         lastCheckedAt: new Date(),
       })
       .where(eq(slaveAccountsTable.id, account.id))
       .returning();
 
     logger.info(
-      { id: account.id, metaapiAccountId: account.metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus },
+      {
+        id: account.id,
+        metaapiAccountId: account.metaapiAccountId,
+        state: data.state,
+        connectionStatus: data.connectionStatus,
+        synchronizationStatus: data.synchronizationStatus,
+        region: data.region,
+      },
       "MetaApi slave status refreshed"
     );
 
@@ -218,13 +250,13 @@ router.delete("/slave-accounts/:id", authenticate, async (req, res): Promise<voi
     .from(slaveAccountsTable)
     .where(and(eq(slaveAccountsTable.id, params.data.id), eq(slaveAccountsTable.userId, req.userId!)));
 
-  // Undeploy from MetaApi before deleting if possible
   if (account?.metaapiAccountId) {
     const metaapiToken = await getMetaApiToken();
     if (metaapiToken) {
-      await fetch(
+      await callMetaApi(
+        "POST",
         `${PROVISIONING_API}/users/current/accounts/${account.metaapiAccountId}/undeploy`,
-        { method: "POST", headers: { "auth-token": metaapiToken } }
+        metaapiToken
       ).catch(() => {});
     }
   }

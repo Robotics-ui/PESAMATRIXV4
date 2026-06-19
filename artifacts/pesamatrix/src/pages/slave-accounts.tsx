@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Users, Plus, Trash2, RefreshCw, AlertCircle, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
-const SETTLED_STATUSES = new Set(["connected", "disconnected", "failed", "suspended"]);
+const SETTLED_STATUSES = new Set(["connected", "disconnected", "failed", "suspended", "pending"]);
 const POLL_INTERVAL_MS = 10_000;
 
 function isPolling(status?: string | null): boolean {
@@ -32,7 +32,8 @@ function StatusBadge({ status }: { status?: string | null }) {
   if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
   if (status === "failed") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
   if (status === "suspended") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Suspended</Badge>;
-  return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{status ?? "error"}</Badge>;
+  if (status === "pending") return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">Pending</Badge>;
+  return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">{status ?? "unknown"}</Badge>;
 }
 
 function RefreshButton({ accountId }: { accountId: number }) {
@@ -189,9 +190,11 @@ export default function SlaveAccountsPage() {
                           <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
                           <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
                           {acc.metaapiAccountId ? (
-                            <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
-                              MetaApi ID: {acc.metaapiAccountId}
+                            <p className="text-xs font-mono text-blue-400 truncate max-w-xs" title={acc.metaapiAccountId}>
+                              MetaApi: {acc.metaapiAccountId}
                             </p>
+                          ) : acc.status === "pending" ? (
+                            <p className="text-xs text-gray-400">Awaiting MetaApi deployment</p>
                           ) : (
                             <p className="text-xs text-red-400">No MetaApi ID — creation failed</p>
                           )}
@@ -208,13 +211,27 @@ export default function SlaveAccountsPage() {
                             )}
                             {acc.connectionStatus && (
                               <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">Connection:</span>
+                                <span className="text-xs text-muted-foreground">Conn:</span>
                                 <span className={`text-xs font-mono ${acc.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
                                   {acc.connectionStatus}
                                 </span>
                               </div>
                             )}
+                            {(acc as { synchronizationStatus?: string | null }).synchronizationStatus && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground">Sync:</span>
+                                <span className={`text-xs font-mono ${(acc as { synchronizationStatus?: string | null }).synchronizationStatus === "SYNCHRONIZED" ? "text-green-400" : "text-yellow-400"}`}>
+                                  {(acc as { synchronizationStatus?: string | null }).synchronizationStatus}
+                                </span>
+                              </div>
+                            )}
                           </div>
+                          {(acc as { lastErrorMessage?: string | null }).lastErrorMessage && (
+                            <div className="flex items-start gap-1.5 mt-1">
+                              <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                              <p className="text-xs text-red-300">{(acc as { lastErrorMessage?: string | null }).lastErrorMessage}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">

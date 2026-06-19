@@ -6,8 +6,7 @@ import { logger } from "./logger";
  * Maps a raw MetaApi state string to a PESAMATRIX internal status string.
  * MetaApi states (in rough lifecycle order):
  *   DEPLOYING → DEPLOYED → CONNECTING → SYNCHRONIZING → CONNECTED
- *   DISCONNECTING → DISCONNECTED → UNDEPLOYING
- *   FAILED
+ *   DISCONNECTING → DISCONNECTED → UNDEPLOYING → FAILED
  */
 export function mapMetaApiState(state: string): string {
   switch (state.toUpperCase()) {
@@ -28,9 +27,12 @@ export function mapMetaApiState(state: string): string {
     case "ERROR":
       return "failed";
     default:
-      return "connecting";
+      // "pending" — not yet submitted to MetaApi or unknown intermediate state
+      return "pending";
   }
 }
+
+// ── MetaApi token cache ───────────────────────────────────────────────────────
 
 let cachedToken: string | null | undefined = undefined;
 let cacheExpiry = 0;
@@ -59,12 +61,84 @@ export function invalidateMetaApiTokenCache(): void {
   cacheExpiry = 0;
 }
 
+// ── Audited HTTP helper ───────────────────────────────────────────────────────
+
+export type MetaApiCallResult<T = unknown> = {
+  ok: boolean;
+  status: number;
+  data: T;
+};
+
+/**
+ * Make a MetaApi REST call with full request/response audit logging.
+ * Every outbound request and every API response body is written to the
+ * structured logger so operators can verify account creation/deployment
+ * against MetaApi's actual responses.
+ */
+export async function callMetaApi<T = unknown>(
+  method: string,
+  url: string,
+  token: string,
+  body?: unknown
+): Promise<MetaApiCallResult<T>> {
+  const hasBody = body != null;
+
+  logger.info(
+    {
+      metaApiAudit: "request",
+      method,
+      url,
+      body: hasBody ? body : undefined,
+    },
+    `MetaApi → ${method} ${url}`
+  );
+
+  const headers: Record<string, string> = { "auth-token": token };
+  if (hasBody) headers["Content-Type"] = "application/json";
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: hasBody ? JSON.stringify(body) : undefined,
+    });
+  } catch (fetchErr) {
+    logger.error(
+      { metaApiAudit: "network-error", method, url, err: fetchErr },
+      `MetaApi network error on ${method} ${url}`
+    );
+    throw fetchErr;
+  }
+
+  let data: T;
+  const rawText = await response.text();
+  try {
+    data = JSON.parse(rawText) as T;
+  } catch {
+    data = rawText as unknown as T;
+  }
+
+  logger.info(
+    {
+      metaApiAudit: "response",
+      method,
+      url,
+      httpStatus: response.status,
+      ok: response.ok,
+      responseBody: data,
+    },
+    `MetaApi ← ${response.status} ${method} ${url}`
+  );
+
+  return { ok: response.ok, status: response.status, data };
+}
+
+// ── CopyFactory subscriber sync ───────────────────────────────────────────────
+
 /**
  * Reads all active bindings for a slave account from the database and pushes
  * the resulting subscriptions list to the CopyFactory subscriber configuration.
- * Calling this after suspending bindings (setting them to "suspended") will
- * send an empty subscriptions array, effectively stopping all copying.
- * Calling it after reactivating bindings will restore all subscriptions.
  */
 export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): Promise<void> {
   const token = await getMetaApiToken();
@@ -104,22 +178,16 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
   }
 
   try {
-    const response = await fetch(
+    const result = await callMetaApi(
+      "PUT",
       `https://copyfactory-api-v1.agiliumtrade.agiliumtrade.ai/users/current/configuration/subscribers/${slave.metaapiAccountId}`,
-      {
-        method: "PUT",
-        headers: {
-          "auth-token": token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ subscriptions }),
-      }
+      token,
+      { subscriptions }
     );
 
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
+    if (!result.ok) {
       logger.error(
-        { slaveAccountId, metaapiAccountId: slave.metaapiAccountId, status: response.status, body },
+        { slaveAccountId, metaapiAccountId: slave.metaapiAccountId, status: result.status, body: result.data },
         "CopyFactory subscriber sync returned non-OK status"
       );
     } else {
@@ -129,7 +197,6 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
       );
     }
   } catch (err) {
-    // DB is the source of truth; log but do not propagate
     logger.error(
       { err, slaveAccountId, metaapiAccountId: slave.metaapiAccountId },
       "CopyFactory subscriber sync failed (network/request error)"

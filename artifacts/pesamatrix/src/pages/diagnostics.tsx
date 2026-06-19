@@ -5,7 +5,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Server, Users, CheckCircle2, XCircle, AlertTriangle, Loader2, WifiOff, Activity } from "lucide-react";
+import {
+  RefreshCw, Server, Users, WifiOff, Activity, Loader2,
+  ChevronDown, ChevronRight, Globe, Hash, AlertTriangle, CheckCircle2, XCircle, Clock,
+} from "lucide-react";
 
 type AccountRecord = {
   id: number;
@@ -17,6 +20,9 @@ type AccountRecord = {
   status: string;
   deploymentStatus: string | null;
   connectionStatus: string | null;
+  synchronizationStatus: string | null;
+  lastErrorMessage: string | null;
+  metaapiRegion: string | null;
   lastCheckedAt: string | null;
   userEmail: string | null;
   rejectionReason?: string | null;
@@ -32,36 +38,181 @@ type DiagnosticsData = {
 };
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "connected") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Connected</Badge>;
-  if (status === "synchronizing") return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Synchronizing</Badge>;
-  if (status === "connecting") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Connecting</Badge>;
-  if (status === "deploying") return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Deploying</Badge>;
-  if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
-  if (status === "failed") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
-  if (status === "suspended") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Suspended</Badge>;
-  if (status === "pending_approval") return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Pending</Badge>;
-  if (status === "rejected") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
-  return <Badge className="bg-muted text-muted-foreground">{status}</Badge>;
+  const map: Record<string, string> = {
+    connected: "bg-green-500/20 text-green-400 border-green-500/30",
+    synchronizing: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    connecting: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+    deploying: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+    disconnected: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    failed: "bg-red-500/20 text-red-400 border-red-500/30",
+    pending: "bg-gray-500/20 text-gray-300 border-gray-500/30",
+    pending_approval: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    suspended: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+    rejected: "bg-red-500/20 text-red-400 border-red-500/30",
+  };
+  return <Badge className={`text-xs font-mono uppercase ${map[status] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>{status}</Badge>;
 }
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className={`rounded-lg border px-4 py-3 ${color}`}>
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-    </div>
-  );
+function StatusIcon({ status }: { status: string }) {
+  if (status === "connected") return <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />;
+  if (status === "failed" || status === "rejected") return <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />;
+  if (status === "disconnected") return <AlertTriangle className="h-3.5 w-3.5 text-orange-400 shrink-0" />;
+  if (status === "pending" || status === "pending_approval") return <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />;
+  return <RefreshCw className="h-3.5 w-3.5 text-blue-400 shrink-0 animate-spin" />;
 }
 
 function formatCheckedAt(ts: string | null): string {
   if (!ts) return "Never";
-  const d = new Date(ts);
-  const diff = Date.now() - d.getTime();
+  const diff = Date.now() - new Date(ts).getTime();
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `${sec}s ago`;
   const min = Math.floor(sec / 60);
   if (min < 60) return `${min}m ago`;
-  return d.toLocaleTimeString();
+  return new Date(ts).toLocaleTimeString();
+}
+
+function AccountRow({ a, type }: { a: AccountRecord; type: "master" | "slave" }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <>
+      <tr
+        className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <td className="py-2.5 pr-3 w-6">
+          {expanded
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+        </td>
+        <td className="py-2.5 pr-3">
+          <div className="flex items-center gap-1.5">
+            <StatusIcon status={a.status} />
+            <span className="text-xs font-mono text-muted-foreground">#{a.id}</span>
+          </div>
+        </td>
+        <td className="py-2.5 pr-3">
+          <p className="text-sm font-medium text-foreground">{a.mt5Login}</p>
+          <p className="text-xs text-muted-foreground">{a.broker}</p>
+        </td>
+        <td className="py-2.5 pr-3 max-w-[160px]">
+          {a.metaapiAccountId ? (
+            <span className="text-xs font-mono text-blue-400 block truncate" title={a.metaapiAccountId}>
+              {a.metaapiAccountId.slice(0, 8)}…{a.metaapiAccountId.slice(-6)}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground/50 italic">not deployed</span>
+          )}
+        </td>
+        <td className="py-2.5 pr-3"><StatusBadge status={a.status} /></td>
+        <td className="py-2.5 pr-3">
+          <span className="text-xs font-mono text-muted-foreground">{a.deploymentStatus ?? "—"}</span>
+        </td>
+        <td className="py-2.5 pr-3">
+          {a.synchronizationStatus ? (
+            <span className={`text-xs font-mono ${a.synchronizationStatus === "SYNCHRONIZED" ? "text-green-400" : "text-yellow-400"}`}>
+              {a.synchronizationStatus}
+            </span>
+          ) : <span className="text-xs text-muted-foreground/50">—</span>}
+        </td>
+        <td className="py-2.5 pr-3">
+          {a.metaapiRegion
+            ? <span className="text-xs text-muted-foreground flex items-center gap-1"><Globe className="h-3 w-3" />{a.metaapiRegion}</span>
+            : <span className="text-xs text-muted-foreground/50">—</span>}
+        </td>
+        <td className="py-2.5 text-xs text-muted-foreground whitespace-nowrap">
+          {formatCheckedAt(a.lastCheckedAt)}
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-border/30">
+          <td colSpan={9} className="px-8 py-4 bg-muted/10">
+            <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
+              {/* Left column */}
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0 flex items-center gap-1"><Hash className="h-3 w-3" />Local DB ID:</span>
+                  <span className="font-mono text-foreground">#{a.id} ({type} account)</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Real MetaApi UUID:</span>
+                  <span className="font-mono text-blue-300 break-all">
+                    {a.metaapiAccountId ?? "Not yet assigned — MetaApi deployment has not run"}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">MetaApi Region:</span>
+                  <span className="font-mono text-foreground">{a.metaapiRegion ?? "Unknown"}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Broker Server:</span>
+                  <span className="font-mono text-foreground">{a.server}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Owner (User ID):</span>
+                  <span className="font-mono text-foreground">{a.userEmail ?? `uid:${a.userId}`}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Created:</span>
+                  <span className="font-mono text-foreground">{new Date(a.lastCheckedAt ?? "").toLocaleString() || "—"}</span>
+                </div>
+              </div>
+              {/* Right column */}
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Internal Status:</span>
+                  <span className="font-mono text-foreground">{a.status}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Deployment State:</span>
+                  <span className="font-mono text-foreground">{a.deploymentStatus ?? "—"}</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Connection Status:</span>
+                  <span className={`font-mono ${a.connectionStatus === "CONNECTED" ? "text-green-400" : "text-foreground"}`}>
+                    {a.connectionStatus ?? "—"}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Sync Status:</span>
+                  <span className={`font-mono ${a.synchronizationStatus === "SYNCHRONIZED" ? "text-green-400" : "text-foreground"}`}>
+                    {a.synchronizationStatus ?? "—"}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-40 shrink-0">Last Checked:</span>
+                  <span className="font-mono text-foreground">
+                    {a.lastCheckedAt ? new Date(a.lastCheckedAt).toLocaleString() : "Never polled"}
+                  </span>
+                </div>
+                {a.lastErrorMessage && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0 text-red-400">Last Error:</span>
+                    <span className="font-mono text-red-400 break-all">{a.lastErrorMessage}</span>
+                  </div>
+                )}
+                {a.rejectionReason && (
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0 text-orange-400">Rejection Reason:</span>
+                    <span className="font-mono text-orange-400">{a.rejectionReason}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${color}`}>
+      <p className="text-xl font-bold">{value}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+    </div>
+  );
 }
 
 export default function DiagnosticsPage() {
@@ -89,7 +240,7 @@ export default function DiagnosticsPage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 3_000));
       await qc.invalidateQueries({ queryKey: ["diagnostics"] });
     } finally {
       setPollerTriggering(false);
@@ -101,36 +252,34 @@ export default function DiagnosticsPage() {
   return (
     <AppLayout>
       <div className="p-6 space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">MetaApi Diagnostics</h1>
-            <p className="text-sm text-muted-foreground mt-1">Live connection status for all deployed accounts — auto-refreshes every 15s</p>
+            <h1 className="text-2xl font-bold text-foreground">Connection Diagnostics</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Real MetaApi UUIDs vs local DB IDs · deployment state · connection · sync · errors — auto-refreshes every 15s
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void qc.invalidateQueries({ queryKey: ["diagnostics"] })}
-              disabled={isLoading}
-            >
+            <Button variant="outline" size="sm" onClick={() => void qc.invalidateQueries({ queryKey: ["diagnostics"] })} disabled={isLoading}>
               <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
-            <Button
-              size="sm"
-              className="bg-blue-600 hover:bg-blue-700"
-              onClick={() => void triggerPoller()}
-              disabled={pollerTriggering}
-            >
-              {pollerTriggering ? (
-                <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-              ) : (
-                <Activity className="h-3.5 w-3.5 mr-2" />
-              )}
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => void triggerPoller()} disabled={pollerTriggering}>
+              {pollerTriggering ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Activity className="h-3.5 w-3.5 mr-2" />}
               Poll Now
             </Button>
           </div>
         </div>
+
+        {/* Legend */}
+        <Card className="border-border/60 bg-muted/5">
+          <CardContent className="py-3 text-xs text-muted-foreground space-y-1">
+            <p><span className="text-foreground font-medium">Local DB ID</span> — integer primary key assigned by this system (e.g. #1, #2). Never sent to MetaApi.</p>
+            <p><span className="text-blue-400 font-medium">Real MetaApi UUID</span> — UUID returned by MetaApi provisioning API on successful account creation. This is proof the account exists in MetaApi.</p>
+            <p><span className="text-foreground font-medium">Click any row</span> to expand full details.</p>
+          </CardContent>
+        </Card>
 
         {error && (
           <Card className="border-destructive/30 bg-destructive/5">
@@ -154,15 +303,16 @@ export default function DiagnosticsPage() {
                 <Server className="h-4 w-4 text-blue-400" />
                 <h2 className="font-semibold text-foreground">Master Accounts ({s.masters.total})</h2>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                <StatCard label="Connected" value={s.masters.connected} color="border-green-500/30 bg-green-500/5 text-green-400" />
-                <StatCard label="Synchronizing" value={s.masters.synchronizing} color="border-blue-500/30 bg-blue-500/5 text-blue-400" />
-                <StatCard label="Connecting" value={s.masters.connecting} color="border-yellow-500/30 bg-yellow-500/5 text-yellow-400" />
-                <StatCard label="Deploying" value={s.masters.deploying} color="border-purple-500/30 bg-purple-500/5 text-purple-400" />
-                <StatCard label="Disconnected" value={s.masters.disconnected} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
-                <StatCard label="Failed" value={s.masters.failed} color="border-red-500/30 bg-red-500/5 text-red-400" />
-                <StatCard label="Pending" value={s.masters.pending_approval} color="border-purple-500/30 bg-purple-500/5 text-purple-400" />
-                <StatCard label="Rejected" value={s.masters.rejected} color="border-red-500/30 bg-red-500/5 text-red-400" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2">
+                <StatCard label="Connected" value={s.masters.connected ?? 0} color="border-green-500/30 bg-green-500/5 text-green-400" />
+                <StatCard label="Synchronizing" value={s.masters.synchronizing ?? 0} color="border-blue-500/30 bg-blue-500/5 text-blue-400" />
+                <StatCard label="Connecting" value={s.masters.connecting ?? 0} color="border-yellow-500/30 bg-yellow-500/5 text-yellow-400" />
+                <StatCard label="Deploying" value={s.masters.deploying ?? 0} color="border-purple-500/30 bg-purple-500/5 text-purple-400" />
+                <StatCard label="Disconnected" value={s.masters.disconnected ?? 0} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
+                <StatCard label="Failed" value={s.masters.failed ?? 0} color="border-red-500/30 bg-red-500/5 text-red-400" />
+                <StatCard label="Pending" value={s.masters.pending ?? 0} color="border-gray-500/30 bg-gray-500/5 text-gray-400" />
+                <StatCard label="Pending Approval" value={s.masters.pending_approval ?? 0} color="border-purple-500/30 bg-purple-500/5 text-purple-300" />
+                <StatCard label="Rejected" value={s.masters.rejected ?? 0} color="border-red-500/30 bg-red-500/5 text-red-400" />
               </div>
             </div>
 
@@ -172,18 +322,19 @@ export default function DiagnosticsPage() {
                 <Users className="h-4 w-4 text-green-400" />
                 <h2 className="font-semibold text-foreground">Slave Accounts ({s.slaves.total})</h2>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                <StatCard label="Connected" value={s.slaves.connected} color="border-green-500/30 bg-green-500/5 text-green-400" />
-                <StatCard label="Synchronizing" value={s.slaves.synchronizing} color="border-blue-500/30 bg-blue-500/5 text-blue-400" />
-                <StatCard label="Connecting" value={s.slaves.connecting} color="border-yellow-500/30 bg-yellow-500/5 text-yellow-400" />
-                <StatCard label="Deploying" value={s.slaves.deploying} color="border-purple-500/30 bg-purple-500/5 text-purple-400" />
-                <StatCard label="Disconnected" value={s.slaves.disconnected} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
-                <StatCard label="Failed" value={s.slaves.failed} color="border-red-500/30 bg-red-500/5 text-red-400" />
-                <StatCard label="Suspended" value={s.slaves.suspended} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                <StatCard label="Connected" value={s.slaves.connected ?? 0} color="border-green-500/30 bg-green-500/5 text-green-400" />
+                <StatCard label="Synchronizing" value={s.slaves.synchronizing ?? 0} color="border-blue-500/30 bg-blue-500/5 text-blue-400" />
+                <StatCard label="Connecting" value={s.slaves.connecting ?? 0} color="border-yellow-500/30 bg-yellow-500/5 text-yellow-400" />
+                <StatCard label="Deploying" value={s.slaves.deploying ?? 0} color="border-purple-500/30 bg-purple-500/5 text-purple-400" />
+                <StatCard label="Disconnected" value={s.slaves.disconnected ?? 0} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
+                <StatCard label="Failed" value={s.slaves.failed ?? 0} color="border-red-500/30 bg-red-500/5 text-red-400" />
+                <StatCard label="Suspended" value={s.slaves.suspended ?? 0} color="border-orange-500/30 bg-orange-500/5 text-orange-400" />
+                <StatCard label="Pending" value={s.slaves.pending ?? 0} color="border-gray-500/30 bg-gray-500/5 text-gray-400" />
               </div>
             </div>
 
-            {/* Master accounts table */}
+            {/* Masters table */}
             {data.masters.length > 0 && (
               <Card className="border-border">
                 <CardHeader className="pb-2">
@@ -197,33 +348,19 @@ export default function DiagnosticsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
-                          <th className="text-left py-2 pr-4">Login</th>
-                          <th className="text-left py-2 pr-4">Broker</th>
-                          <th className="text-left py-2 pr-4">User</th>
-                          <th className="text-left py-2 pr-4">Status</th>
-                          <th className="text-left py-2 pr-4">Deploy State</th>
-                          <th className="text-left py-2 pr-4">Connection</th>
-                          <th className="text-left py-2">Last Checked</th>
+                          <th className="w-6 py-2 pr-2" />
+                          <th className="text-left py-2 pr-3">DB#</th>
+                          <th className="text-left py-2 pr-3">Account</th>
+                          <th className="text-left py-2 pr-3">MetaApi UUID</th>
+                          <th className="text-left py-2 pr-3">Status</th>
+                          <th className="text-left py-2 pr-3">Deploy</th>
+                          <th className="text-left py-2 pr-3">Sync</th>
+                          <th className="text-left py-2 pr-3">Region</th>
+                          <th className="text-left py-2">Checked</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border">
-                        {data.masters.map((a) => (
-                          <tr key={a.id} className="hover:bg-muted/20">
-                            <td className="py-2 pr-4 font-mono">{a.mt5Login}</td>
-                            <td className="py-2 pr-4 text-muted-foreground">{a.broker}</td>
-                            <td className="py-2 pr-4 text-muted-foreground truncate max-w-[140px]">{a.userEmail ?? `uid:${a.userId}`}</td>
-                            <td className="py-2 pr-4"><StatusBadge status={a.status} /></td>
-                            <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{a.deploymentStatus ?? "—"}</td>
-                            <td className="py-2 pr-4">
-                              {a.connectionStatus ? (
-                                <span className={`text-xs font-mono ${a.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
-                                  {a.connectionStatus}
-                                </span>
-                              ) : "—"}
-                            </td>
-                            <td className="py-2 text-xs text-muted-foreground">{formatCheckedAt(a.lastCheckedAt)}</td>
-                          </tr>
-                        ))}
+                      <tbody>
+                        {data.masters.map((a) => <AccountRow key={a.id} a={a} type="master" />)}
                       </tbody>
                     </table>
                   </div>
@@ -231,7 +368,7 @@ export default function DiagnosticsPage() {
               </Card>
             )}
 
-            {/* Slave accounts table */}
+            {/* Slaves table */}
             {data.slaves.length > 0 && (
               <Card className="border-border">
                 <CardHeader className="pb-2">
@@ -245,33 +382,19 @@ export default function DiagnosticsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
-                          <th className="text-left py-2 pr-4">Login</th>
-                          <th className="text-left py-2 pr-4">Broker</th>
-                          <th className="text-left py-2 pr-4">User</th>
-                          <th className="text-left py-2 pr-4">Status</th>
-                          <th className="text-left py-2 pr-4">Deploy State</th>
-                          <th className="text-left py-2 pr-4">Connection</th>
-                          <th className="text-left py-2">Last Checked</th>
+                          <th className="w-6 py-2 pr-2" />
+                          <th className="text-left py-2 pr-3">DB#</th>
+                          <th className="text-left py-2 pr-3">Account</th>
+                          <th className="text-left py-2 pr-3">MetaApi UUID</th>
+                          <th className="text-left py-2 pr-3">Status</th>
+                          <th className="text-left py-2 pr-3">Deploy</th>
+                          <th className="text-left py-2 pr-3">Sync</th>
+                          <th className="text-left py-2 pr-3">Region</th>
+                          <th className="text-left py-2">Checked</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border">
-                        {data.slaves.map((a) => (
-                          <tr key={a.id} className="hover:bg-muted/20">
-                            <td className="py-2 pr-4 font-mono">{a.mt5Login}</td>
-                            <td className="py-2 pr-4 text-muted-foreground">{a.broker}</td>
-                            <td className="py-2 pr-4 text-muted-foreground truncate max-w-[140px]">{a.userEmail ?? `uid:${a.userId}`}</td>
-                            <td className="py-2 pr-4"><StatusBadge status={a.status} /></td>
-                            <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{a.deploymentStatus ?? "—"}</td>
-                            <td className="py-2 pr-4">
-                              {a.connectionStatus ? (
-                                <span className={`text-xs font-mono ${a.connectionStatus === "CONNECTED" ? "text-green-400" : "text-orange-400"}`}>
-                                  {a.connectionStatus}
-                                </span>
-                              ) : "—"}
-                            </td>
-                            <td className="py-2 text-xs text-muted-foreground">{formatCheckedAt(a.lastCheckedAt)}</td>
-                          </tr>
-                        ))}
+                      <tbody>
+                        {data.slaves.map((a) => <AccountRow key={a.id} a={a} type="slave" />)}
                       </tbody>
                     </table>
                   </div>
@@ -288,6 +411,31 @@ export default function DiagnosticsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Worker info */}
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-blue-400" /> Background Workers
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <p className="font-medium text-foreground">Status Poller</p>
+                    <p className="text-muted-foreground mt-0.5">Polls deploying/connecting/synchronizing accounts every 30s · 20 concurrent requests · supports 2,000 accounts</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Reconnect Worker</p>
+                    <p className="text-muted-foreground mt-0.5">Every 5 min: retries disconnected accounts stale &gt;10 min + retries all failed accounts</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">Subscription Enforcer</p>
+                    <p className="text-muted-foreground mt-0.5">Every 30 min: expires subscriptions past their end date, suspends CopyFactory bindings</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>
