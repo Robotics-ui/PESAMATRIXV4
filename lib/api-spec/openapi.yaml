@@ -1238,6 +1238,10 @@ components:
       type: object
       required: [broker, server, mt5Login, investorPassword]
       properties:
+        platform:
+          type: string
+          enum: [mt4, mt5]
+          default: mt5
         broker:
           type: string
         server:
@@ -1257,6 +1261,8 @@ components:
           type: integer
         metaapiAccountId:
           type: ["string", "null"]
+        platform:
+          type: string
         mt5Login:
           type: string
         broker:
@@ -1300,6 +1306,10 @@ components:
       type: object
       required: [broker, server, mt5Login, investorPassword]
       properties:
+        platform:
+          type: string
+          enum: [mt4, mt5]
+          default: mt5
         broker:
           type: string
         server:
@@ -1321,6 +1331,8 @@ components:
           type: ["string", "null"]
         subscriberId:
           type: ["string", "null"]
+        platform:
+          type: string
         mt5Login:
           type: string
         broker:

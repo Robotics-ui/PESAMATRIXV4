@@ -292,6 +292,7 @@ router.post("/admin/master-accounts/:id/approve", authenticate, requireAdmin, as
     plainPassword,
     server: account.server,
     broker: account.broker,
+    platform: account.platform ?? "mt5",
   });
 
   const [updated] = await db

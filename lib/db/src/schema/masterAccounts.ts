@@ -6,6 +6,7 @@ export const masterAccountsTable = pgTable("master_accounts", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   metaapiAccountId: text("metaapi_account_id"),
+  platform: text("platform").notNull().default("mt5"),
   mt5Login: text("mt5_login").notNull(),
   broker: text("broker").notNull(),
   server: text("server").notNull(),

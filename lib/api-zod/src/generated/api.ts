@@ -250,6 +250,7 @@ export const ListMasterAccountsResponseItem = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -269,7 +270,10 @@ export const ListMasterAccountsResponse = zod.array(ListMasterAccountsResponseIt
 /**
  * @summary Create a new master MT5 account via MetaApi
  */
+export const createMasterAccountBodyPlatformDefault = `mt5`;
+
 export const CreateMasterAccountBody = zod.object({
+  "platform": zod.enum(['mt4', 'mt5']).default(createMasterAccountBodyPlatformDefault),
   "broker": zod.string(),
   "server": zod.string(),
   "mt5Login": zod.string(),
@@ -288,6 +292,7 @@ export const GetMasterAccountResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -322,6 +327,7 @@ export const RefreshMasterAccountStatusResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -345,6 +351,7 @@ export const ListSlaveAccountsResponseItem = zod.object({
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
   "subscriberId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -363,7 +370,10 @@ export const ListSlaveAccountsResponse = zod.array(ListSlaveAccountsResponseItem
 /**
  * @summary Create a new slave MT5 account via MetaApi CopyFactory
  */
+export const createSlaveAccountBodyPlatformDefault = `mt5`;
+
 export const CreateSlaveAccountBody = zod.object({
+  "platform": zod.enum(['mt4', 'mt5']).default(createSlaveAccountBodyPlatformDefault),
   "broker": zod.string(),
   "server": zod.string(),
   "mt5Login": zod.string(),
@@ -391,6 +401,7 @@ export const RefreshSlaveAccountStatusResponse = zod.object({
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
   "subscriberId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -554,6 +565,7 @@ export const ListAdminMasterAccountsResponseItem = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -584,6 +596,7 @@ export const ApproveMasterAccountResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
@@ -617,6 +630,7 @@ export const RejectMasterAccountResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
   "metaapiAccountId": zod.string().nullish(),
+  "platform": zod.string().optional(),
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),

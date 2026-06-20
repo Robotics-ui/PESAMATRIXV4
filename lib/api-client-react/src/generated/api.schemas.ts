@@ -172,7 +172,16 @@ export interface Payment {
   createdAt: string;
 }
 
+export type MasterAccountInputPlatform = typeof MasterAccountInputPlatform[keyof typeof MasterAccountInputPlatform];
+
+
+export const MasterAccountInputPlatform = {
+  mt4: 'mt4',
+  mt5: 'mt5',
+} as const;
+
 export interface MasterAccountInput {
+  platform?: MasterAccountInputPlatform;
   broker: string;
   server: string;
   mt5Login: string;
@@ -200,6 +209,7 @@ export interface MasterAccount {
   userId: number;
   /** @nullable */
   metaapiAccountId?: string | null;
+  platform?: string;
   mt5Login: string;
   broker: string;
   server: string;
@@ -228,7 +238,16 @@ export type AdminMasterAccount = MasterAccount & ({
   userName?: string | null;
 });
 
+export type SlaveAccountInputPlatform = typeof SlaveAccountInputPlatform[keyof typeof SlaveAccountInputPlatform];
+
+
+export const SlaveAccountInputPlatform = {
+  mt4: 'mt4',
+  mt5: 'mt5',
+} as const;
+
 export interface SlaveAccountInput {
+  platform?: SlaveAccountInputPlatform;
   broker: string;
   server: string;
   mt5Login: string;
@@ -257,6 +276,7 @@ export interface SlaveAccount {
   metaapiAccountId?: string | null;
   /** @nullable */
   subscriberId?: string | null;
+  platform?: string;
   mt5Login: string;
   broker: string;
   server: string;

@@ -26,6 +26,7 @@ export function serializeAccount(a: typeof masterAccountsTable.$inferSelect) {
     id: a.id,
     userId: a.userId,
     metaapiAccountId: a.metaapiAccountId ?? null,
+    platform: a.platform,
     mt5Login: a.mt5Login,
     broker: a.broker,
     server: a.server,
@@ -51,6 +52,7 @@ export async function deployMasterToMetaApi(params: {
   plainPassword: string;
   server: string;
   broker: string;
+  platform?: string;
 }): Promise<{
   metaapiAccountId: string | null;
   status: string;
@@ -81,8 +83,8 @@ export async function deployMasterToMetaApi(params: {
         password: params.plainPassword,
         server: params.server,
         name: `${params.broker}-${params.mt5Login}`,
-        platform: "mt5",
-        type: "cloud-g2",
+        platform: params.platform === "mt4" ? "mt4" : "mt5",
+        type: params.platform === "mt4" ? "cloud-g1" : "cloud-g2",
         magic: Math.floor(Math.random() * 900000) + 100000,
         reliability: "regular",
       }
@@ -172,13 +174,14 @@ router.post("/master-accounts", authenticate, async (req, res): Promise<void> =>
     return;
   }
 
-  const { broker, server, mt5Login, investorPassword } = parsed.data;
+  const { broker, server, mt5Login, investorPassword, platform = "mt5" } = parsed.data;
 
   const [account] = await db
     .insert(masterAccountsTable)
     .values({
       userId: req.userId!,
       metaapiAccountId: null,
+      platform,
       mt5Login,
       broker,
       server,

@@ -7,6 +7,7 @@ export const slaveAccountsTable = pgTable("slave_accounts", {
   userId: integer("user_id").notNull(),
   metaapiAccountId: text("metaapi_account_id"),
   subscriberId: text("subscriber_id"),
+  platform: text("platform").notNull().default("mt5"),
   mt5Login: text("mt5_login").notNull(),
   broker: text("broker").notNull(),
   server: text("server").notNull(),

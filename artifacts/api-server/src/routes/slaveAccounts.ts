@@ -26,6 +26,7 @@ export function serializeAccount(a: typeof slaveAccountsTable.$inferSelect) {
     userId: a.userId,
     metaapiAccountId: a.metaapiAccountId ?? null,
     subscriberId: a.subscriberId ?? null,
+    platform: a.platform,
     mt5Login: a.mt5Login,
     broker: a.broker,
     server: a.server,
@@ -66,7 +67,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
     return;
   }
 
-  const { broker, server, mt5Login, investorPassword } = parsed.data;
+  const { broker, server, mt5Login, investorPassword, platform = "mt5" } = parsed.data;
 
   let metaapiAccountId: string | null = null;
   let subscriberId: string | null = null;
@@ -93,8 +94,8 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
           password: investorPassword,
           server,
           name: `${broker}-${mt5Login}-slave`,
-          platform: "mt5",
-          type: "cloud-g2",
+          platform: platform === "mt4" ? "mt4" : "mt5",
+          type: platform === "mt4" ? "cloud-g1" : "cloud-g2",
           magic: Math.floor(Math.random() * 900000) + 100000,
           reliability: "regular",
         }
@@ -148,6 +149,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
       userId: req.userId!,
       metaapiAccountId,
       subscriberId,
+      platform,
       mt5Login,
       broker,
       server,

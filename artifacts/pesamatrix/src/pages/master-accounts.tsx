@@ -103,7 +103,7 @@ export default function MasterAccountsPage() {
   const { data: accounts, isLoading } = useListMasterAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ mt5Login: "", investorPassword: "", server: "", broker: "" });
+  const [form, setForm] = useState({ mt5Login: "", investorPassword: "", server: "", broker: "", platform: "mt5" });
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -144,7 +144,7 @@ export default function MasterAccountsPage() {
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ mt5Login: "", investorPassword: "", server: "", broker: "" });
+        setForm({ mt5Login: "", investorPassword: "", server: "", broker: "", platform: "mt5" });
         void qc.invalidateQueries({ queryKey: getListMasterAccountsQueryKey() });
       },
       onError: (err: unknown) => {
@@ -247,7 +247,7 @@ export default function MasterAccountsPage() {
                           }`} />
                         </div>
                         <div className="min-w-0 space-y-1">
-                          <p className="font-semibold text-foreground">MT5: {acc.mt5Login}</p>
+                          <p className="font-semibold text-foreground">{((acc as { platform?: string }).platform ?? "MT5").toUpperCase()}: {acc.mt5Login}</p>
                           <p className="text-xs text-muted-foreground">{acc.broker} · {acc.server}</p>
                           {acc.metaapiAccountId ? (
                             <p className="text-xs font-mono text-muted-foreground truncate max-w-xs">
@@ -344,9 +344,28 @@ export default function MasterAccountsPage() {
                 <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 Your account details will be reviewed by an admin. Once approved and deployed, the account will go through the full activation lifecycle before accepting subscribers.
               </div>
+              <div className="space-y-2">
+                <Label>Platform</Label>
+                <div className="flex rounded-md border border-input overflow-hidden h-9">
+                  {(["mt5", "mt4"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setForm({ ...form, platform: p })}
+                      className={`flex-1 text-sm font-medium transition-colors ${
+                        form.platform === p
+                          ? "bg-blue-600 text-white"
+                          : "bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                    >
+                      {p.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>MT5 Login</Label>
+                  <Label>{form.platform === "mt4" ? "MT4" : "MT5"} Login</Label>
                   <Input placeholder="12345678" value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} />
                 </div>
                 <div className="space-y-2">
@@ -376,7 +395,7 @@ export default function MasterAccountsPage() {
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
                 disabled={creating || !form.mt5Login || !form.broker || !form.investorPassword}
-                onClick={() => create({ data: { mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
+                onClick={() => create({ data: { platform: form.platform as "mt4" | "mt5", mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
               >
                 {creating ? "Submitting..." : "Submit for Approval"}
               </Button>
