@@ -425,6 +425,13 @@ router.post("/payments/:checkoutRequestId/verify", authenticate, async (req, res
     if (resultCode === 0) {
       await db.update(paymentsTable).set({ status: "completed" }).where(eq(paymentsTable.id, payment.id));
       await activateSubscription(payment.userId, payment.days);
+      // SMS: payment received + subscription activated
+      const [verifyUser] = await db.select().from(usersTable).where(eq(usersTable.id, payment.userId)).limit(1);
+      if (verifyUser?.phone) {
+        const [verifySub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, payment.userId)).limit(1);
+        notifyPaymentReceived({ userId: payment.userId, phone: verifyUser.phone, name: verifyUser.name, amount: parseFloat(payment.amount as string).toFixed(2), receipt: "" });
+        if (verifySub?.endDate) notifySubscriptionActivated({ userId: payment.userId, phone: verifyUser.phone, name: verifyUser.name, endDate: verifySub.endDate.toDateString() });
+      }
       res.json({ status: "completed", mpesaReceipt: null, amount: parseFloat(payment.amount as string) });
     } else if (resultCode !== null && resultCode !== 0) {
       await db.update(paymentsTable).set({ status: "failed" }).where(eq(paymentsTable.id, payment.id));
