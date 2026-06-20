@@ -11,8 +11,9 @@ import { logger } from "./logger";
 export function mapMetaApiState(state: string): string {
   switch (state.toUpperCase()) {
     case "DEPLOYING":
-    case "DEPLOYED":
       return "deploying";
+    case "DEPLOYED":
+      return "deployed";
     case "CONNECTING":
       return "connecting";
     case "SYNCHRONIZING":

@@ -18,3 +18,4 @@ export * from "./smsTemplates";
 export * from "./smsQueue";
 export * from "./smsLogs";
 export * from "./notificationPreferences";
+export * from "./masterAccountAuditLogs";

@@ -1,16 +1,24 @@
 import { inArray, isNotNull, and, eq } from "drizzle-orm";
-import { db, masterAccountsTable, slaveAccountsTable } from "@workspace/db";
+import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAccountAuditLogsTable } from "@workspace/db";
 import { getMetaApiToken, callMetaApi, mapMetaApiState } from "./metaapi";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
 const POLL_INTERVAL_MS = 30_000;
+const MONITOR_INTERVAL_MS = 5 * 60 * 1000;
 const CONCURRENCY = 20;
 
-const NON_TERMINAL_STATUSES = ["deploying", "connecting", "synchronizing"];
+// Statuses that need 30s lifecycle-advancement polling
+const ADVANCING_STATUSES = ["deploying", "connecting", "synchronizing", "deployed", "strategy_created"];
+// Statuses that need 5-min health monitoring
+const MONITOR_STATUSES = ["active", "suspended"];
+// Slave statuses (unchanged lifecycle)
+const SLAVE_NON_TERMINAL_STATUSES = ["deploying", "connecting", "synchronizing"];
 
 let pollerRunning = false;
+let monitorRunning = false;
 let pollCount = 0;
+let monitorCount = 0;
 
 type MetaApiAccountResponse = {
   state?: string;
@@ -20,9 +28,50 @@ type MetaApiAccountResponse = {
   message?: string;
 };
 
-async function checkSingleMasterAccount(
+// ── Audit log helper ──────────────────────────────────────────────────────────
+
+export async function writeAuditLog(params: {
+  masterAccountId: number;
+  userId: number;
+  adminId?: number | null;
+  event: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  reason?: string | null;
+}): Promise<void> {
+  try {
+    await db.insert(masterAccountAuditLogsTable).values({
+      masterAccountId: params.masterAccountId,
+      userId: params.userId,
+      adminId: params.adminId ?? null,
+      event: params.event,
+      fromStatus: params.fromStatus ?? null,
+      toStatus: params.toStatus ?? null,
+      reason: params.reason ?? null,
+    });
+  } catch (err) {
+    logger.warn({ err, masterAccountId: params.masterAccountId, event: params.event }, "Failed to write master account audit log");
+  }
+}
+
+// ── Strategy existence helper ─────────────────────────────────────────────────
+
+async function hasStrategyForMaster(masterAccountId: number): Promise<boolean> {
+  const rows = await db
+    .select({ id: strategiesTable.id })
+    .from(strategiesTable)
+    .where(eq(strategiesTable.masterAccountId, masterAccountId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+// ── Master lifecycle advancement (30s poller) ─────────────────────────────────
+
+async function advanceMasterAccount(
   id: number,
   metaapiAccountId: string,
+  currentStatus: string,
+  userId: number,
   token: string
 ): Promise<void> {
   try {
@@ -34,7 +83,34 @@ async function checkSingleMasterAccount(
     if (!result.ok) return;
 
     const data = result.data;
-    const newStatus = mapMetaApiState(data.state ?? "");
+    const state = (data.state ?? "").toUpperCase();
+    const conn = (data.connectionStatus ?? "").toUpperCase();
+
+    let newStatus: string | null = null;
+    let event: string | null = null;
+
+    if (state === "FAILED" || state === "ERROR") {
+      newStatus = "failed";
+      event = "deployment_failed";
+    } else if (state === "CONNECTED" || (state === "DEPLOYED" && conn === "CONNECTED")) {
+      const stratExists = await hasStrategyForMaster(id);
+      newStatus = stratExists ? "active" : "deployed";
+      event = stratExists ? "activated" : "deployment_success";
+    } else if (state === "DEPLOYED") {
+      const stratExists = await hasStrategyForMaster(id);
+      newStatus = stratExists ? "strategy_created" : "deployed";
+      event = "deployment_success";
+    } else if (state === "DEPLOYING") {
+      newStatus = "deploying";
+    } else if (state === "CONNECTING") {
+      newStatus = "connecting";
+    } else if (state === "SYNCHRONIZING") {
+      newStatus = "synchronizing";
+    } else if (state === "DISCONNECTING" || state === "DISCONNECTED" || state === "UNDEPLOYING") {
+      newStatus = "disconnected";
+    }
+
+    if (newStatus === null || newStatus === currentStatus) return;
 
     await db
       .update(masterAccountsTable)
@@ -49,14 +125,95 @@ async function checkSingleMasterAccount(
       })
       .where(eq(masterAccountsTable.id, id));
 
-    logger.debug(
-      { id, metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus, synchronizationStatus: data.synchronizationStatus, newStatus },
-      "Master account polled"
+    logger.info(
+      { id, metaapiAccountId, from: currentStatus, to: newStatus, state, conn },
+      "Master account status advanced"
     );
+
+    if (event) {
+      await writeAuditLog({
+        masterAccountId: id,
+        userId,
+        event,
+        fromStatus: currentStatus,
+        toStatus: newStatus,
+      });
+    }
   } catch (err) {
-    logger.warn({ id, metaapiAccountId, err }, "Failed to poll master account");
+    logger.warn({ id, metaapiAccountId, err }, "Failed to advance master account lifecycle");
   }
 }
+
+// ── Master health monitor (5-min poller) ──────────────────────────────────────
+
+async function monitorMasterAccount(
+  id: number,
+  metaapiAccountId: string,
+  currentStatus: string,
+  userId: number,
+  token: string
+): Promise<void> {
+  try {
+    const result = await callMetaApi<MetaApiAccountResponse>(
+      "GET",
+      `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`,
+      token
+    );
+    if (!result.ok) return;
+
+    const data = result.data;
+    const state = (data.state ?? "").toUpperCase();
+    const conn = (data.connectionStatus ?? "").toUpperCase();
+
+    const isConnected =
+      state === "CONNECTED" || (state === "DEPLOYED" && conn === "CONNECTED");
+    const isLost =
+      state === "FAILED" ||
+      state === "DISCONNECTED" ||
+      state === "DISCONNECTING" ||
+      conn === "DISCONNECTED";
+
+    let newStatus: string | null = null;
+    let event: string | null = null;
+
+    if (currentStatus === "active" && isLost) {
+      newStatus = "suspended";
+      event = "suspended";
+    } else if (currentStatus === "suspended" && isConnected) {
+      newStatus = "active";
+      event = "reactivated";
+    }
+
+    if (newStatus === null) return;
+
+    await db
+      .update(masterAccountsTable)
+      .set({
+        status: newStatus,
+        connectionStatus: data.connectionStatus ?? null,
+        synchronizationStatus: data.synchronizationStatus ?? null,
+        lastCheckedAt: new Date(),
+      })
+      .where(eq(masterAccountsTable.id, id));
+
+    logger.info(
+      { id, metaapiAccountId, from: currentStatus, to: newStatus, state, conn },
+      "Master account health monitor updated"
+    );
+
+    await writeAuditLog({
+      masterAccountId: id,
+      userId,
+      event: event!,
+      fromStatus: currentStatus,
+      toStatus: newStatus,
+    });
+  } catch (err) {
+    logger.warn({ id, metaapiAccountId, err }, "Failed to monitor master account health");
+  }
+}
+
+// ── Slave account polling (unchanged) ────────────────────────────────────────
 
 async function checkSingleSlaveAccount(
   id: number,
@@ -88,13 +245,15 @@ async function checkSingleSlaveAccount(
       .where(eq(slaveAccountsTable.id, id));
 
     logger.debug(
-      { id, metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus, synchronizationStatus: data.synchronizationStatus, newStatus },
+      { id, metaapiAccountId, state: data.state, connectionStatus: data.connectionStatus, newStatus },
       "Slave account polled"
     );
   } catch (err) {
     logger.warn({ id, metaapiAccountId, err }, "Failed to poll slave account");
   }
 }
+
+// ── 30-second lifecycle advancement tick ─────────────────────────────────────
 
 async function runPollerTick(): Promise<void> {
   if (pollerRunning) {
@@ -109,11 +268,16 @@ async function runPollerTick(): Promise<void> {
 
     const [masters, slaves] = await Promise.all([
       db
-        .select({ id: masterAccountsTable.id, metaapiAccountId: masterAccountsTable.metaapiAccountId })
+        .select({
+          id: masterAccountsTable.id,
+          metaapiAccountId: masterAccountsTable.metaapiAccountId,
+          status: masterAccountsTable.status,
+          userId: masterAccountsTable.userId,
+        })
         .from(masterAccountsTable)
         .where(
           and(
-            inArray(masterAccountsTable.status, NON_TERMINAL_STATUSES),
+            inArray(masterAccountsTable.status, ADVANCING_STATUSES),
             isNotNull(masterAccountsTable.metaapiAccountId)
           )
         ),
@@ -122,7 +286,7 @@ async function runPollerTick(): Promise<void> {
         .from(slaveAccountsTable)
         .where(
           and(
-            inArray(slaveAccountsTable.status, NON_TERMINAL_STATUSES),
+            inArray(slaveAccountsTable.status, SLAVE_NON_TERMINAL_STATUSES),
             isNotNull(slaveAccountsTable.metaapiAccountId)
           )
         ),
@@ -140,7 +304,9 @@ async function runPollerTick(): Promise<void> {
     for (let i = 0; i < masters.length; i += CONCURRENCY) {
       const chunk = masters.slice(i, i + CONCURRENCY);
       await Promise.allSettled(
-        chunk.map((a) => checkSingleMasterAccount(a.id, a.metaapiAccountId!, token))
+        chunk.map((a) =>
+          advanceMasterAccount(a.id, a.metaapiAccountId!, a.status, a.userId, token)
+        )
       );
     }
 
@@ -162,12 +328,73 @@ async function runPollerTick(): Promise<void> {
   }
 }
 
+// ── 5-minute health monitor tick ──────────────────────────────────────────────
+
+async function runMonitorTick(): Promise<void> {
+  if (monitorRunning) {
+    logger.debug("Health monitor tick skipped — previous run still in progress");
+    return;
+  }
+  monitorRunning = true;
+  const startedAt = Date.now();
+  try {
+    const token = await getMetaApiToken();
+    if (!token) return;
+
+    const masters = await db
+      .select({
+        id: masterAccountsTable.id,
+        metaapiAccountId: masterAccountsTable.metaapiAccountId,
+        status: masterAccountsTable.status,
+        userId: masterAccountsTable.userId,
+      })
+      .from(masterAccountsTable)
+      .where(
+        and(
+          inArray(masterAccountsTable.status, MONITOR_STATUSES),
+          isNotNull(masterAccountsTable.metaapiAccountId)
+        )
+      );
+
+    if (masters.length === 0) return;
+
+    monitorCount++;
+    logger.info(
+      { monitor: monitorCount, accounts: masters.length },
+      "Health monitor tick started"
+    );
+
+    for (let i = 0; i < masters.length; i += CONCURRENCY) {
+      const chunk = masters.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(
+        chunk.map((a) =>
+          monitorMasterAccount(a.id, a.metaapiAccountId!, a.status, a.userId, token)
+        )
+      );
+    }
+
+    logger.info(
+      { monitor: monitorCount, accounts: masters.length, durationMs: Date.now() - startedAt },
+      "Health monitor tick finished"
+    );
+  } catch (err) {
+    logger.error({ err }, "Health monitor tick failed");
+  } finally {
+    monitorRunning = false;
+  }
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 export function startAccountPoller(): void {
-  setInterval(() => {
-    void runPollerTick();
-  }, POLL_INTERVAL_MS);
-  logger.info({ intervalMs: POLL_INTERVAL_MS, concurrency: CONCURRENCY }, "MetaApi account status poller started");
+  setInterval(() => { void runPollerTick(); }, POLL_INTERVAL_MS);
+  setInterval(() => { void runMonitorTick(); }, MONITOR_INTERVAL_MS);
+  logger.info(
+    { pollIntervalMs: POLL_INTERVAL_MS, monitorIntervalMs: MONITOR_INTERVAL_MS, concurrency: CONCURRENCY },
+    "MetaApi account poller and health monitor started"
+  );
   void runPollerTick();
+  void runMonitorTick();
 }
 
 export async function runPollerNow(): Promise<void> {
