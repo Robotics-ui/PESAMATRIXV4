@@ -6,6 +6,7 @@ import { authenticate } from "../middlewares/authenticate";
 import { encryptCredential } from "../lib/auth";
 import { getMetaApiToken, callMetaApi, mapMetaApiState } from "../lib/metaapi";
 import { logger } from "../lib/logger";
+import { writeAuditLog } from "../lib/accountPoller";
 
 const router = Router();
 
@@ -194,6 +195,14 @@ router.post("/master-accounts", authenticate, async (req, res): Promise<void> =>
 
   logger.info({ id: account.id, mt5Login, userId: req.userId }, "Master account submitted for approval");
 
+  await writeAuditLog({
+    masterAccountId: account.id,
+    userId: req.userId!,
+    event: "submitted",
+    fromStatus: null,
+    toStatus: "pending_approval",
+  });
+
   res.status(201).json(serializeAccount(account));
 });
 
@@ -238,7 +247,31 @@ router.get("/master-accounts/:id/refresh-status", authenticate, async (req, res)
     }
 
     const data = result.data;
-    const newStatus = mapMetaApiState(data.state ?? "");
+
+    // For lifecycle-managed statuses, never regress via mapMetaApiState.
+    // The poller / health-monitor owns transitions for these statuses.
+    const LIFECYCLE_MANAGED = new Set(["deployed", "strategy_created", "active", "suspended"]);
+    let newStatus: string;
+    if (LIFECYCLE_MANAGED.has(account.status)) {
+      const state = (data.state ?? "").toUpperCase();
+      const conn = (data.connectionStatus ?? "").toUpperCase();
+      const isConnected = state === "CONNECTED" || (state === "DEPLOYED" && conn === "CONNECTED");
+      const isLost =
+        state === "FAILED" ||
+        state === "DISCONNECTED" ||
+        state === "DISCONNECTING" ||
+        conn === "DISCONNECTED";
+
+      if (account.status === "active" && isLost) {
+        newStatus = "suspended";
+      } else if (account.status === "suspended" && isConnected) {
+        newStatus = "active";
+      } else {
+        newStatus = account.status; // keep managed status unchanged
+      }
+    } else {
+      newStatus = mapMetaApiState(data.state ?? "");
+    }
 
     const [updated] = await db
       .update(masterAccountsTable)

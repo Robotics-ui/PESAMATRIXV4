@@ -441,13 +441,32 @@ function SchedulerMonitorTab() {
 }
 
 function MasterApprovalStatusBadge({ status }: { status?: string | null }) {
-  if (status === "pending_approval") return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Pending Approval</Badge>;
-  if (status === "deploying") return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Deploying</Badge>;
-  if (status === "connecting") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">Connecting</Badge>;
-  if (status === "connected") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Connected</Badge>;
-  if (status === "disconnected") return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
-  if (status === "rejected") return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
-  return <Badge className="bg-muted/50 text-muted-foreground border-muted">{status ?? "unknown"}</Badge>;
+  switch (status) {
+    case "pending_approval":
+      return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30">Pending Approval</Badge>;
+    case "approved":
+      return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Approved</Badge>;
+    case "deploying":
+    case "connecting":
+    case "synchronizing":
+      return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>;
+    case "deployed":
+      return <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Deployed</Badge>;
+    case "strategy_created":
+      return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Strategy Created</Badge>;
+    case "active":
+      return <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Active</Badge>;
+    case "suspended":
+      return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Suspended</Badge>;
+    case "rejected":
+      return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Rejected</Badge>;
+    case "failed":
+      return <Badge className="bg-red-500/20 text-red-400 border-red-500/30">Failed</Badge>;
+    case "disconnected":
+      return <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30">Disconnected</Badge>;
+    default:
+      return <Badge className="bg-muted/50 text-muted-foreground border-muted">{status ?? "unknown"}</Badge>;
+  }
 }
 
 function MasterApprovalsTab() {
