@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Users, Plus, Trash2, RefreshCw, AlertCircle, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { BrokerCombobox, ServerCombobox } from "@/components/broker-combobox";
 
 const SETTLED_STATUSES = new Set(["connected", "disconnected", "failed", "suspended", "pending"]);
 const POLL_INTERVAL_MS = 10_000;
@@ -274,15 +275,21 @@ export default function SlaveAccountsPage() {
                   <Input type="password" placeholder="••••••••" value={form.investorPassword} onChange={(e) => setForm({ ...form, investorPassword: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Server</Label>
-                  <Input placeholder="ICMarkets-Live" value={form.server} onChange={(e) => setForm({ ...form, server: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Broker</Label>
-                  <Input placeholder="ICMarkets" value={form.broker} onChange={(e) => setForm({ ...form, broker: e.target.value })} />
-                </div>
+              <div className="space-y-2">
+                <Label>Broker</Label>
+                <BrokerCombobox
+                  value={form.broker}
+                  onChange={(v) => setForm({ ...form, broker: v })}
+                  onServerReset={() => setForm((f) => ({ ...f, server: "" }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Server</Label>
+                <ServerCombobox
+                  value={form.server}
+                  onChange={(v) => setForm({ ...form, server: v })}
+                  broker={form.broker}
+                />
               </div>
               <p className="text-xs text-muted-foreground">
                 Submitting creates a real MetaApi account and deploys it. Status will auto-refresh every 10 seconds until connected or disconnected.
