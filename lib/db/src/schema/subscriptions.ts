@@ -15,6 +15,11 @@ export const subscriptionsTable = pgTable("subscriptions", {
   index("subscriptions_user_id_idx").on(table.userId),
   index("subscriptions_status_idx").on(table.status),
   index("subscriptions_end_date_idx").on(table.endDate),
+  // Composite index for the scheduler enforcement tick:
+  // filters by (status, endDate) and joins back by userId — covers both
+  // the expiry scan and the expiry-warning scan in a single index pass.
+  index("subscriptions_status_end_date_idx").on(table.status, table.endDate),
+  index("subscriptions_user_status_idx").on(table.userId, table.status),
 ]);
 
 export const insertSubscriptionSchema = createInsertSchema(subscriptionsTable).omit({ id: true, createdAt: true });

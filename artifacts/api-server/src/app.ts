@@ -15,6 +15,24 @@ import { seedDefaultTemplates } from "./lib/smsService";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// ── Startup environment guard ─────────────────────────────────────────────────
+// Fail loudly in production if critical secrets are using insecure defaults.
+if (process.env.NODE_ENV === "production") {
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === "pesamatrix-secret-key") {
+    throw new Error(
+      "[FATAL] SESSION_SECRET must be set to a strong random value in production. " +
+      "The default fallback 'pesamatrix-secret-key' is not safe for production use."
+    );
+  }
+  if (!process.env.COPYFACTORY_WEBHOOK_SECRET) {
+    // Log a warning but don't crash — webhook route will fail-closed on its own.
+    console.error(
+      "[WARN] COPYFACTORY_WEBHOOK_SECRET is not set. The /api/webhooks/copyfactory endpoint " +
+      "will reject all requests until this is configured."
+    );
+  }
+}
+
 const app: Express = express();
 
 app.set("trust proxy", 1);
@@ -38,7 +56,20 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// In production set ALLOWED_ORIGIN to your exact domain (e.g. https://pesamatrix.replit.app).
+// In development / demo mode the wildcard is preserved so the Replit proxy works.
+const allowedOrigin = process.env.ALLOWED_ORIGIN;
+app.use(
+  cors(
+    allowedOrigin
+      ? {
+          origin: allowedOrigin,
+          credentials: true,
+        }
+      : undefined, // wildcard — safe for dev, but set ALLOWED_ORIGIN in production
+  ),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

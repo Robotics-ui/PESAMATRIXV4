@@ -12,10 +12,20 @@ const router = Router();
  * Register this URL in your MetaApi CopyFactory strategy/subscriber listener:
  *   https://<your-domain>/api/webhooks/copyfactory?secret=<COPYFACTORY_WEBHOOK_SECRET>
  *
- * If COPYFACTORY_WEBHOOK_SECRET is not set, all requests are accepted (dev/demo mode).
+ * If COPYFACTORY_WEBHOOK_SECRET is not set:
+ *   - In production: all requests are REJECTED (fail-closed) to prevent unauthenticated trade writes.
+ *   - In development/demo: all requests are accepted.
  */
 router.post("/webhooks/copyfactory", async (req, res): Promise<void> => {
   const secret = process.env.COPYFACTORY_WEBHOOK_SECRET;
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!secret && isProduction) {
+    // Fail-closed: never accept unauthenticated trade writes in production
+    res.status(503).json({ error: "Webhook endpoint not configured" });
+    return;
+  }
+
   if (secret && req.query.secret !== secret) {
     res.status(401).json({ error: "Unauthorized" });
     return;

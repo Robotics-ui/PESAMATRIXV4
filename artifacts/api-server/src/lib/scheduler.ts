@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, or } from "drizzle-orm";
 import { db, subscriptionsTable, slaveAccountsTable, bindingsTable, usersTable, adminSettingsTable } from "@workspace/db";
 import { logger } from "./logger";
 import { syncSlaveSubscriberToCopyFactory } from "./metaapi";
@@ -104,9 +104,13 @@ export async function runEnforcementTick(): Promise<void> {
   try {
     const now = new Date();
 
-    // Fetch ALL subscriptions — active and expired — to handle both
-    // expiration and renewal in a single pass.
-    const allSubs = await db.select().from(subscriptionsTable);
+    // Fetch only actionable subscriptions (active or expired).
+    // Cancelled/pending rows are never touched by this worker, so we skip
+    // them at the query layer to keep the tick fast at 2000+ subscribers.
+    const allSubs = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(or(eq(subscriptionsTable.status, "active"), eq(subscriptionsTable.status, "expired")));
     log.totalChecked = allSubs.length;
 
     logger.info(
