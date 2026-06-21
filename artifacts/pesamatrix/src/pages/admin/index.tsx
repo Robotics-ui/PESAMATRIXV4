@@ -1161,9 +1161,11 @@ function BannerSettingsTab() {
 }
 
 type ReferralSetting = { id: number; referralsRequired: number; rewardDays: number; isEnabled: boolean };
+type ReferralStats = { totalReferrals: number; rewarded: number; pending: number; totalRewardDaysGiven: number; topReferrers: { name: string; email: string; code: string; totalReferrals: number; totalRewardDays: number }[] };
 
 function ReferralSettingsTab() {
   const [milestones, setMilestones] = useState<ReferralSetting[]>([]);
+  const [stats, setStats] = useState<ReferralStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1188,8 +1190,12 @@ function ReferralSettingsTab() {
   async function load() {
     setLoading(true);
     try {
-      const data = await apiFetch<ReferralSetting[]>("/api/admin/referral-settings");
+      const [data, statsData] = await Promise.all([
+        apiFetch<ReferralSetting[]>("/api/admin/referral-settings"),
+        apiFetch<ReferralStats>("/api/admin/referral-stats"),
+      ]);
       setMilestones(data);
+      setStats(statsData);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -1244,6 +1250,55 @@ function ReferralSettingsTab() {
 
   return (
     <div className="space-y-4">
+      {/* Stats overview */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total Referrals", value: stats.totalReferrals, color: "text-blue-400" },
+            { label: "Rewarded", value: stats.rewarded, color: "text-green-400" },
+            { label: "Pending", value: stats.pending, color: "text-yellow-400" },
+            { label: "Bonus Days Given", value: stats.totalRewardDaysGiven, color: "text-purple-400" },
+          ].map((s) => (
+            <Card key={s.label} className="border-border">
+              <CardContent className="pt-4 pb-3">
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Top referrers */}
+      {stats && stats.topReferrers.length > 0 && (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-green-400" />
+              Top Referrers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {stats.topReferrers.map((r, i) => (
+                <div key={r.code} className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground w-5 text-right shrink-0">{i + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">{r.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{r.email}</p>
+                  </div>
+                  <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 font-mono text-xs">{r.code}</Badge>
+                  <div className="text-right shrink-0">
+                    <p className="text-green-400 font-medium">{r.totalReferrals} refs</p>
+                    <p className="text-xs text-muted-foreground">{r.totalRewardDays}d earned</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">

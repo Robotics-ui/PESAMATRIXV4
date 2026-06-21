@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { eq, sum, count } from "drizzle-orm";
+import { eq, sum, count, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable } from "@workspace/db";
+import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable, referralsTable, promoCodesTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
@@ -64,6 +64,34 @@ router.get("/admin/stats", authenticate, requireAdmin, async (_req, res): Promis
     activeStrategies: strategyCountResult.count,
     totalPayments: paymentCountResult.count,
     pendingMasterApprovals: pendingMasterResult.count,
+  });
+});
+
+router.get("/admin/referral-stats", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const [totalResult] = await db.select({ count: count() }).from(referralsTable);
+  const [rewardedResult] = await db.select({ count: count() }).from(referralsTable).where(eq(referralsTable.status, "rewarded"));
+  const [pendingResult] = await db.select({ count: count() }).from(referralsTable).where(eq(referralsTable.status, "pending"));
+  const [totalDaysResult] = await db.select({ total: sum(referralsTable.rewardDays) }).from(referralsTable).where(eq(referralsTable.status, "rewarded"));
+
+  const topCodes = await db
+    .select()
+    .from(promoCodesTable)
+    .orderBy(desc(promoCodesTable.totalReferrals))
+    .limit(5);
+
+  const topReferrers = await Promise.all(
+    topCodes.map(async (pc) => {
+      const [user] = await db.select({ name: usersTable.name, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, pc.userId)).limit(1);
+      return { name: user?.name ?? "Unknown", email: user?.email ?? "", code: pc.code, totalReferrals: pc.totalReferrals, totalRewardDays: pc.totalRewardDays };
+    }),
+  );
+
+  res.json({
+    totalReferrals: totalResult.count,
+    rewarded: rewardedResult.count,
+    pending: pendingResult.count,
+    totalRewardDaysGiven: parseInt(String(totalDaysResult.total ?? "0")),
+    topReferrers,
   });
 });
 
