@@ -21,6 +21,8 @@ import {
   AlertCircle,
   Phone,
   CheckCircle,
+  CheckCircle2,
+  Circle,
   RefreshCw,
 } from "lucide-react";
 
@@ -233,6 +235,133 @@ function PhoneVerificationBanner({ token }: { token: string | null }) {
   );
 }
 
+// ── Getting Started Checklist ─────────────────────────────────────────────────
+
+interface SummaryShape {
+  slaveAccounts?: number | null;
+  strategies?: number | null;
+  activeBindings?: number | null;
+}
+
+function GettingStartedChecklist({
+  token,
+  summary,
+}: {
+  token: string | null;
+  summary: SummaryShape | undefined;
+}) {
+  const { data: otpStatus } = useQuery<OtpStatus>({
+    queryKey: ["otp-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/auth/otp-status", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return { phoneVerified: true, requiresOtp: false, subscriptionStatus: "expired" };
+      return res.json() as Promise<OtpStatus>;
+    },
+    enabled: !!token,
+    staleTime: 30_000,
+  });
+
+  const steps = [
+    {
+      done: otpStatus?.phoneVerified ?? false,
+      label: "Verify your phone number",
+      detail: "Confirm the OTP sent to you to activate your 2-day free trial",
+      href: null as string | null,
+      icon: Phone,
+    },
+    {
+      done: (summary?.slaveAccounts ?? 0) > 0,
+      label: "Add a slave account",
+      detail: "Connect an MT5/MT4 follower account that will copy trades",
+      href: "/slave-accounts",
+      icon: Users,
+    },
+    {
+      done: (summary?.strategies ?? 0) > 0,
+      label: "Create a strategy",
+      detail: "Link a master account to a CopyFactory strategy",
+      href: "/strategies",
+      icon: GitBranch,
+    },
+    {
+      done: (summary?.activeBindings ?? 0) > 0,
+      label: "Create a binding",
+      detail: "Connect your slave account to a strategy to start copying",
+      href: "/bindings",
+      icon: Link2,
+    },
+  ];
+
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length;
+
+  if (allDone) return null;
+
+  return (
+    <Card className="border-blue-600/30 bg-blue-600/5">
+      <CardContent className="pt-4 pb-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-blue-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Getting started
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {doneCount}/{steps.length} complete
+          </span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-blue-600 to-green-500 rounded-full transition-all duration-500"
+            style={{ width: `${(doneCount / steps.length) * 100}%` }}
+          />
+        </div>
+
+        <ol className="space-y-2 pt-1">
+          {steps.map(({ done, label, detail, href, icon: Icon }, i) => {
+            const content = (
+              <div
+                className={`flex items-start gap-3 rounded-md px-2 py-1.5 transition-colors ${
+                  done ? "opacity-50" : href ? "hover:bg-blue-600/10 cursor-pointer" : ""
+                }`}
+              >
+                <div className="shrink-0 mt-0.5">
+                  {done ? (
+                    <CheckCircle className="h-4 w-4 text-green-400" />
+                  ) : (
+                    <Circle className="h-4 w-4 text-blue-400/50" />
+                  )}
+                </div>
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <Icon className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${done ? "text-muted-foreground" : "text-blue-400"}`} />
+                  <div className="min-w-0">
+                    <p className={`text-xs font-semibold ${done ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                      {i + 1}. {label}
+                    </p>
+                    {!done && <p className="text-xs text-muted-foreground mt-0.5">{detail}</p>}
+                  </div>
+                </div>
+                {!done && href && (
+                  <span className="text-xs text-blue-400 shrink-0 mt-0.5">Go &rarr;</span>
+                )}
+              </div>
+            );
+
+            return (
+              <li key={i}>
+                {href && !done ? <Link href={href}>{content}</Link> : content}
+              </li>
+            );
+          })}
+        </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Critical Announcements ────────────────────────────────────────────────────
 
 function CriticalAnnouncementBanner({ token }: { token: string | null }) {
@@ -347,6 +476,9 @@ export default function DashboardPage() {
 
         {/* Phone verification banner — shown when OTP is pending */}
         <PhoneVerificationBanner token={token} />
+
+        {/* Getting started checklist — auto-hides once all steps complete */}
+        <GettingStartedChecklist token={token} summary={summary} />
 
         {/* Critical announcements */}
         <CriticalAnnouncementBanner token={token} />
