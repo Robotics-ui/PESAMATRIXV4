@@ -16,6 +16,8 @@ export function startSmsWorker() {
     }
   });
 
+  logger.info("SMS queue worker running every minute");
+
   const nextRun = new Date();
   nextRun.setSeconds(0);
   nextRun.setMilliseconds(0);

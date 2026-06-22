@@ -81,6 +81,14 @@ export async function enqueueEventSms(opts: {
   await enqueueSms({ userId, phone, message, eventType });
 }
 
+function resolveCredsFromEnv() {
+  const apiKey = process.env.MSPACE_API_KEY?.trim() ?? "";
+  const username = process.env.MSPACE_USERNAME?.trim() ?? "";
+  const senderId = process.env.MSPACE_SENDER_ID?.trim() ?? "PESAMTRX";
+  const apiUrl = process.env.MSPACE_API_URL?.trim() ?? "https://api.mspace.co.ke/smsapi/v2/sendtext";
+  return { apiKey, username, senderId, apiUrl };
+}
+
 function resolveCreds(settings: typeof smsSettingsTable.$inferSelect) {
   return {
     apiKey: process.env.MSPACE_API_KEY?.trim() || settings.apiKey,
@@ -91,12 +99,19 @@ function resolveCreds(settings: typeof smsSettingsTable.$inferSelect) {
 }
 
 export async function sendSmsNow(phone: string, message: string): Promise<{ success: boolean; response: string }> {
+  // If both env-var credentials are present, use them directly — no DB settings required.
+  const envCreds = resolveCredsFromEnv();
+  const envReady = Boolean(envCreds.apiKey && envCreds.username);
+
   const settings = await getSettings();
-  if (!settings || !settings.enabled) {
+
+  if (!envReady && (!settings || !settings.enabled)) {
     return { success: false, response: "SMS not enabled" };
   }
 
-  const { apiKey, username, senderId, apiUrl } = resolveCreds(settings);
+  const { apiKey, username, senderId, apiUrl } = envReady
+    ? envCreds
+    : resolveCreds(settings!);
 
   if (!apiKey || !username) {
     return { success: false, response: "MSpace API Key and Username are required" };
@@ -186,8 +201,11 @@ export async function validateMSpaceCredentials(opts: {
 }
 
 export async function processSmsQueue(batchSize = 50, concurrency = 10): Promise<void> {
+  const envCreds = resolveCredsFromEnv();
+  const envReady = Boolean(envCreds.apiKey && envCreds.username);
+
   const settings = await getSettings();
-  if (!settings || !settings.enabled) return;
+  if (!envReady && (!settings || !settings.enabled)) return;
 
   const now = new Date();
   const pending = await db
@@ -213,6 +231,12 @@ export async function processSmsQueue(batchSize = 50, concurrency = 10): Promise
         await db.update(smsQueueTable).set({ status: "processing", lastAttemptAt: new Date() }).where(eq(smsQueueTable.id, item.id));
 
         const { success, response } = await sendSmsNow(item.phone, item.message);
+
+        if (!success) {
+          logger.warn({ queueId: item.id, phone: item.phone, eventType: item.eventType, response, attempt: item.attempts + 1 }, "SMS send failed");
+        } else {
+          logger.info({ queueId: item.id, phone: item.phone, eventType: item.eventType }, "SMS sent successfully");
+        }
 
         const newStatus = success ? "sent" : item.attempts + 1 >= 3 ? "failed" : "pending";
         await db.update(smsQueueTable)
@@ -279,6 +303,41 @@ export async function broadcastSms(opts: {
   );
 
   return { queued: withPhone.length };
+}
+
+export async function seedSmsSettings(): Promise<void> {
+  const apiKey = process.env.MSPACE_API_KEY?.trim() ?? "";
+  const username = process.env.MSPACE_USERNAME?.trim() ?? "";
+  const senderId = process.env.MSPACE_SENDER_ID?.trim() ?? "PESAMTRX";
+  const apiUrl = process.env.MSPACE_API_URL?.trim() ?? "https://api.mspace.co.ke/smsapi/v2/sendtext";
+
+  if (!apiKey || !username) {
+    logger.warn("MSPACE_API_KEY / MSPACE_USERNAME not set — SMS will remain disabled until configured via Admin > SMS");
+    return;
+  }
+
+  const [existing] = await db.select().from(smsSettingsTable).limit(1);
+  if (existing) {
+    if (!existing.enabled) {
+      await db
+        .update(smsSettingsTable)
+        .set({ enabled: true, apiKey, username, senderId, apiUrl })
+        .where(eq(smsSettingsTable.id, existing.id));
+      invalidateSmsSettingsCache();
+      logger.info("SMS settings auto-enabled from environment variables");
+    }
+  } else {
+    await db.insert(smsSettingsTable).values({
+      providerName: "MSpace",
+      apiKey,
+      username,
+      senderId,
+      apiUrl,
+      enabled: true,
+    });
+    invalidateSmsSettingsCache();
+    logger.info("SMS settings seeded from environment variables");
+  }
 }
 
 export async function seedDefaultTemplates() {
