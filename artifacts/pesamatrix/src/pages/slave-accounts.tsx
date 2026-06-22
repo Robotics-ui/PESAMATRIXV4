@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Users, Plus, Trash2, RefreshCw, AlertCircle, Info } from "lucide-react";
+import { Users, Plus, Trash2, RefreshCw, AlertCircle, Info, KeyRound, Server as ServerIcon, Rocket, Clock as ClockIcon } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BrokerCombobox, ServerCombobox } from "@/components/broker-combobox";
 
@@ -149,11 +149,51 @@ export default function SlaveAccountsPage() {
         </div>
 
         <Card className="border-blue-600/30 bg-blue-600/5">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex items-start gap-2 text-sm text-blue-300">
-              <Info className="h-4 w-4 shrink-0 mt-0.5" />
-              <p>Slave accounts follow master accounts via CopyFactory bindings. They are auto-suspended when your subscription expires.</p>
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-blue-300">
+              <Info className="h-4 w-4 shrink-0" />
+              How to add a slave account
             </div>
+            <ol className="space-y-2.5 pl-1">
+              {[
+                {
+                  icon: KeyRound,
+                  title: "Get your investor password",
+                  detail: "Log into your broker portal or MT5/MT4 terminal and copy your investor (read-only) password — this is different from your main trading password.",
+                },
+                {
+                  icon: Users,
+                  title: "Enter your login number and investor password",
+                  detail: "Your login is the account number shown in MT5 (e.g. 12345678). The investor password gives MetaApi read-only access — it cannot place trades.",
+                },
+                {
+                  icon: ServerIcon,
+                  title: "Select your broker and server",
+                  detail: "Start typing your broker name and select the matching server. The server name appears in your MT5 terminal under File → Open Account.",
+                },
+                {
+                  icon: Rocket,
+                  title: "Submit — MetaApi deploys the account",
+                  detail: "Deployment takes 1–3 minutes. Status auto-refreshes every 10 seconds. Once Connected, you can bind this account to a strategy.",
+                },
+                {
+                  icon: ClockIcon,
+                  title: "Accounts are suspended when your subscription expires",
+                  detail: "All bindings pause automatically when your plan expires, and resume when you renew.",
+                },
+              ].map(({ icon: Icon, title, detail }, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                    <span className="text-xs font-bold text-blue-400 w-4 text-right">{i + 1}.</span>
+                    <Icon className="h-3.5 w-3.5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-blue-300">{title}</p>
+                    <p className="text-xs text-blue-300/60 mt-0.5">{detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </CardContent>
         </Card>
 

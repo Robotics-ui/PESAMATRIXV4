@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Link2, Plus, Trash2, RefreshCw, AlertCircle, ArrowRight, ShieldAlert } from "lucide-react";
+import { Link2, Plus, Trash2, RefreshCw, AlertCircle, ArrowRight, ShieldAlert, Info, GitBranch, Users, Sliders } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function BindingsPage() {
@@ -79,6 +79,55 @@ export default function BindingsPage() {
             <Plus className="h-4 w-4 mr-2" /> New Binding
           </Button>
         </div>
+
+        <Card className="border-green-600/30 bg-green-600/5">
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-green-300">
+              <Info className="h-4 w-4 shrink-0" />
+              How to create a binding
+            </div>
+            <ol className="space-y-2.5 pl-1">
+              {[
+                {
+                  icon: GitBranch,
+                  title: "You need an active strategy and a slave account",
+                  detail: "The strategy's master account must have reached Active status. If the master is still deploying or connecting, wait for it to become Active before binding.",
+                },
+                {
+                  icon: GitBranch,
+                  title: "Select a strategy",
+                  detail: "The strategy is the signal source — it defines which master account's trades are copied. Only strategies with an Active master are available.",
+                },
+                {
+                  icon: Users,
+                  title: "Select a slave account",
+                  detail: "This is the follower account that will execute the copied trades. Make sure it is Connected (not Suspended or Failed) before binding.",
+                },
+                {
+                  icon: Sliders,
+                  title: "Set the risk multiplier",
+                  detail: "1.0 copies the exact lot size from the master. 0.5 = half lots (lower risk). 2.0 = double lots (higher risk). Start at 1.0 if unsure.",
+                },
+                {
+                  icon: ArrowRight,
+                  title: "Copy trading starts immediately",
+                  detail: "The binding is registered in CopyFactory. From this point, every trade the master opens is replicated on your slave account in real time.",
+                },
+              ].map(({ icon: Icon, title, detail }, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                    <span className="text-xs font-bold text-green-400 w-4 text-right">{i + 1}.</span>
+                    <Icon className="h-3.5 w-3.5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-green-300">{title}</p>
+                    <p className="text-xs text-green-300/60 mt-0.5">{detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
 
         {/* No strategies or slave accounts at all */}
         {!strategies?.length || !slaveAccounts?.length ? (

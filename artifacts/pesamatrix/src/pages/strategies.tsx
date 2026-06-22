@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { GitBranch, Plus, Trash2, RefreshCw, AlertCircle, Server, Clock } from "lucide-react";
+import { GitBranch, Plus, Trash2, RefreshCw, AlertCircle, Server, Clock, Info, Tag, Link2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 // Masters must be at least deployed before a strategy can be created
@@ -67,6 +67,50 @@ export default function StrategiesPage() {
             <Plus className="h-4 w-4 mr-2" /> New Strategy
           </Button>
         </div>
+
+        <Card className="border-green-600/30 bg-green-600/5">
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-green-300">
+              <Info className="h-4 w-4 shrink-0" />
+              How to create a strategy
+            </div>
+            <ol className="space-y-2.5 pl-1">
+              {[
+                {
+                  icon: Server,
+                  title: "You need a deployed master account first",
+                  detail: "Go to Master Accounts and ensure at least one has reached Deployed (or higher) status. The master is the signal provider — the account whose trades get copied.",
+                },
+                {
+                  icon: Tag,
+                  title: "Give your strategy a name",
+                  detail: "Choose something descriptive (e.g. \"Gold Scalper\", \"EURUSD Swing\"). This name appears in CopyFactory and helps you identify which strategy is running.",
+                },
+                {
+                  icon: GitBranch,
+                  title: "Select the master account",
+                  detail: "Only accounts at Deployed status or above are available. Selecting one registers the master as a CopyFactory signal provider under this strategy.",
+                },
+                {
+                  icon: Link2,
+                  title: "Then create bindings to start copying",
+                  detail: "Once the strategy is active and the master is Active, go to Bindings to connect your slave accounts. One strategy can feed multiple slave accounts.",
+                },
+              ].map(({ icon: Icon, title, detail }, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                    <span className="text-xs font-bold text-green-400 w-4 text-right">{i + 1}.</span>
+                    <Icon className="h-3.5 w-3.5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-green-300">{title}</p>
+                    <p className="text-xs text-green-300/60 mt-0.5">{detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
 
         {!masterAccounts?.length && (
           <Card className="border-orange-500/30 bg-orange-500/5">
