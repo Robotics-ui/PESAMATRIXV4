@@ -32,7 +32,7 @@ import {
   Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle,
   CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity,
   Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown, Radio, KeyRound,
-  Gift, Plus, Trash2, Pencil,
+  Gift, Plus, Trash2, Pencil, List, ChevronLeft, ChevronRight, Phone, Mail,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -1162,6 +1162,25 @@ function BannerSettingsTab() {
 
 type ReferralSetting = { id: number; referralsRequired: number; rewardDays: number; isEnabled: boolean };
 type ReferralStats = { totalReferrals: number; rewarded: number; pending: number; totalRewardDaysGiven: number; topReferrers: { name: string; email: string; code: string; totalReferrals: number; totalRewardDays: number }[] };
+type ReferralRecord = {
+  id: number; status: string; rewardDays: number | null; rewardedAt: string | null; createdAt: string;
+  referredEmail: string; referredPhone: string;
+  referrerId: number; referrerName: string; referrerEmail: string; referrerCode: string | null;
+};
+type ReferralLog = { referrals: ReferralRecord[]; total: number; page: number; pageSize: number };
+
+const STATUS_FILTERS = ["all", "pending", "rewarded", "rejected"] as const;
+
+function statusBadge(status: string) {
+  if (status === "rewarded") return <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">Rewarded</Badge>;
+  if (status === "pending") return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>;
+  return <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Rejected</Badge>;
+}
+
+function fmt(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 function ReferralSettingsTab() {
   const [milestones, setMilestones] = useState<ReferralSetting[]>([]);
@@ -1172,6 +1191,11 @@ function ReferralSettingsTab() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ referralsRequired: "", rewardDays: "" });
   const [showAdd, setShowAdd] = useState(false);
+
+  const [logFilter, setLogFilter] = useState<"all" | "pending" | "rewarded" | "rejected">("all");
+  const [logPage, setLogPage] = useState(1);
+  const [log, setLog] = useState<ReferralLog | null>(null);
+  const [logLoading, setLogLoading] = useState(true);
 
   const token = () => localStorage.getItem("token") ?? "";
 
@@ -1203,7 +1227,20 @@ function ReferralSettingsTab() {
     }
   }
 
+  async function loadLog(filter: string, page: number) {
+    setLogLoading(true);
+    try {
+      const data = await apiFetch<ReferralLog>(`/api/admin/referrals?status=${filter}&page=${page}`);
+      setLog(data);
+    } catch {
+      // silently fail log load
+    } finally {
+      setLogLoading(false);
+    }
+  }
+
   useEffect(() => { void load(); }, []);
+  useEffect(() => { void loadLog(logFilter, logPage); }, [logFilter, logPage]);
 
   async function handleAdd() {
     const r = parseInt(form.referralsRequired);
@@ -1247,6 +1284,8 @@ function ReferralSettingsTab() {
       setMilestones((prev) => prev.filter((x) => x.id !== id));
     } catch (e) { setError((e as Error).message); }
   }
+
+  const totalPages = log ? Math.ceil(log.total / log.pageSize) : 1;
 
   return (
     <div className="space-y-4">
@@ -1298,6 +1337,108 @@ function ReferralSettingsTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Full referral log */}
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-base flex items-center gap-2">
+              <List className="h-4 w-4 text-blue-400" />
+              Referral Log
+              {log && <span className="text-xs font-normal text-muted-foreground ml-1">({log.total} total)</span>}
+            </CardTitle>
+            <div className="flex items-center gap-1">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => { setLogFilter(f); setLogPage(1); }}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                    logFilter === f
+                      ? "bg-blue-600 text-white"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                  }`}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </button>
+              ))}
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 ml-1" onClick={() => void loadLog(logFilter, logPage)}>
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {logLoading ? (
+            <div className="flex justify-center py-8"><RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : !log || log.referrals.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No referrals found.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Referrer</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Referred User</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Status</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Reward</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Joined</th>
+                      <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2.5">Rewarded</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {log.referrals.map((r) => (
+                      <tr key={r.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-foreground truncate max-w-[140px]">{r.referrerName}</p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[120px]">{r.referrerEmail}</span>
+                          </div>
+                          {r.referrerCode && (
+                            <Badge className="mt-0.5 bg-blue-500/20 text-blue-400 border-blue-500/30 font-mono text-xs">{r.referrerCode}</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[140px]">{r.referredEmail}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            <span>{r.referredPhone}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">{statusBadge(r.status)}</td>
+                        <td className="px-4 py-3">
+                          {r.rewardDays
+                            ? <span className="text-green-400 font-medium">+{r.rewardDays}d</span>
+                            : <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{fmt(r.createdAt)}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{fmt(r.rewardedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                  <span className="text-xs text-muted-foreground">Page {log.page} of {totalPages}</span>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={logPage <= 1} onClick={() => setLogPage((p) => p - 1)}>
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={logPage >= totalPages} onClick={() => setLogPage((p) => p + 1)}>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="border-border">
         <CardHeader className="pb-3">

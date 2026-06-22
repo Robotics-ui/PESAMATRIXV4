@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, count, sum, sql } from "drizzle-orm";
 import {
   db,
   promoCodesTable,
@@ -250,6 +250,95 @@ router.delete(
       .delete(referralSettingsTable)
       .where(eq(referralSettingsTable.id, id));
     res.sendStatus(204);
+  },
+);
+
+// ── Admin: referral aggregate stats ──────────────────────────────────────────
+
+router.get(
+  "/admin/referral-stats",
+  authenticate,
+  requireAdmin,
+  async (_req, res): Promise<void> => {
+    const [totals] = await db
+      .select({
+        totalReferrals: count(),
+        rewarded: sql<number>`count(*) filter (where ${referralsTable.status} = 'rewarded')`.mapWith(Number),
+        pending: sql<number>`count(*) filter (where ${referralsTable.status} = 'pending')`.mapWith(Number),
+        totalRewardDaysGiven: sql<number>`coalesce(sum(${referralsTable.rewardDays}) filter (where ${referralsTable.status} = 'rewarded'), 0)`.mapWith(Number),
+      })
+      .from(referralsTable);
+
+    const referrer = usersTable;
+    const topRows = await db
+      .select({
+        name: referrer.name,
+        email: referrer.email,
+        code: promoCodesTable.code,
+        totalReferrals: promoCodesTable.totalReferrals,
+        totalRewardDays: promoCodesTable.totalRewardDays,
+      })
+      .from(promoCodesTable)
+      .innerJoin(referrer, eq(promoCodesTable.userId, referrer.id))
+      .where(sql`${promoCodesTable.totalReferrals} > 0`)
+      .orderBy(desc(promoCodesTable.totalReferrals))
+      .limit(10);
+
+    res.json({
+      totalReferrals: totals?.totalReferrals ?? 0,
+      rewarded: totals?.rewarded ?? 0,
+      pending: totals?.pending ?? 0,
+      totalRewardDaysGiven: totals?.totalRewardDaysGiven ?? 0,
+      topReferrers: topRows,
+    });
+  },
+);
+
+// ── Admin: full referral log ──────────────────────────────────────────────────
+
+router.get(
+  "/admin/referrals",
+  authenticate,
+  requireAdmin,
+  async (req, res): Promise<void> => {
+    const statusFilter = typeof req.query.status === "string" && req.query.status !== "all"
+      ? req.query.status
+      : null;
+
+    const pageSize = 50;
+    const page = Math.max(1, parseInt(String(req.query.page ?? "1")));
+    const offset = (page - 1) * pageSize;
+
+    const referrer = usersTable;
+
+    const rows = await db
+      .select({
+        id: referralsTable.id,
+        status: referralsTable.status,
+        rewardDays: referralsTable.rewardDays,
+        rewardedAt: referralsTable.rewardedAt,
+        createdAt: referralsTable.createdAt,
+        referredEmail: referralsTable.referredEmail,
+        referredPhone: referralsTable.referredPhone,
+        referrerId: referralsTable.referrerId,
+        referrerName: referrer.name,
+        referrerEmail: referrer.email,
+        referrerCode: promoCodesTable.code,
+      })
+      .from(referralsTable)
+      .innerJoin(referrer, eq(referralsTable.referrerId, referrer.id))
+      .leftJoin(promoCodesTable, eq(referralsTable.referrerId, promoCodesTable.userId))
+      .where(statusFilter ? eq(referralsTable.status, statusFilter) : undefined)
+      .orderBy(desc(referralsTable.createdAt))
+      .limit(pageSize)
+      .offset(offset);
+
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(referralsTable)
+      .where(statusFilter ? eq(referralsTable.status, statusFilter) : undefined);
+
+    res.json({ referrals: rows, total, page, pageSize });
   },
 );
 
