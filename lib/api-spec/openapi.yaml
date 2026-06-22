@@ -1154,7 +1154,7 @@ components:
           type: integer
         status:
           type: string
-          enum: [active, expired, suspended]
+          enum: [active, free_trial, expired, suspended]
         startDate:
           type: ["string", "null"]
           format: date-time
@@ -1271,7 +1271,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending_approval, pending, deploying, connecting, synchronizing, connected, disconnected, failed, error, rejected]
+          enum: [pending_approval, pending, deploying, connecting, synchronizing, connected, active, disconnected, failed, error, rejected, suspended]
         deploymentStatus:
           type: ["string", "null"]
         connectionStatus:
@@ -1304,7 +1304,7 @@ components:
     # SLAVE ACCOUNT
     SlaveAccountInput:
       type: object
-      required: [broker, server, mt5Login, investorPassword]
+      required: [broker, server, mt5Login, tradingPassword]
       properties:
         platform:
           type: string
@@ -1316,7 +1316,7 @@ components:
           type: string
         mt5Login:
           type: string
-        investorPassword:
+        tradingPassword:
           type: string
 
     SlaveAccount:

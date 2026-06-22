@@ -68,7 +68,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
     return;
   }
 
-  const { broker, server, mt5Login, investorPassword, platform = "mt5" } = parsed.data;
+  const { broker, server, mt5Login, tradingPassword, platform = "mt5" } = parsed.data;
 
   // During free trial — check if this MT5 login was already used in another trial
   if (sub.status === "free_trial") {
@@ -115,7 +115,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
         metaapiToken,
         {
           login: mt5Login,
-          password: investorPassword,
+          password: tradingPassword,
           server,
           name: `${broker}-${mt5Login}-slave`,
           platform: platform === "mt4" ? "mt4" : "mt5",
@@ -177,7 +177,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
       mt5Login,
       broker,
       server,
-      investorPasswordEncrypted: encryptCredential(investorPassword),
+      tradingPasswordEncrypted: encryptCredential(tradingPassword),
       status,
       deploymentStatus,
       connectionStatus,

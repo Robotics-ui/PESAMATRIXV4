@@ -1,8 +1,8 @@
-import cron from "node-cron";
+import cron, { type ScheduledTask } from "node-cron";
 import { processSmsQueue } from "./smsService";
 import { logger } from "./logger";
 
-let workerTask: cron.ScheduledTask | null = null;
+let workerTask: ScheduledTask | null = null;
 
 export function startSmsWorker() {
   if (workerTask) return;

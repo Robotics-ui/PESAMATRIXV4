@@ -11,7 +11,7 @@ export const slaveAccountsTable = pgTable("slave_accounts", {
   mt5Login: text("mt5_login").notNull(),
   broker: text("broker").notNull(),
   server: text("server").notNull(),
-  investorPasswordEncrypted: text("investor_password_encrypted").notNull(),
+  tradingPasswordEncrypted: text("trading_password_encrypted").notNull(),
   status: text("status").notNull().default("connecting"),
   deploymentStatus: text("deployment_status"),
   connectionStatus: text("connection_status"),

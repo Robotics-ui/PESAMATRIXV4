@@ -157,7 +157,7 @@ export const UpdateMeResponse = zod.object({
 export const GetMySubscriptionResponse = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
-  "status": zod.enum(['active', 'expired', 'suspended']),
+  "status": zod.enum(['active', 'free_trial', 'expired', 'suspended']),
   "startDate": zod.coerce.date().nullish(),
   "endDate": zod.coerce.date().nullish(),
   "daysPaid": zod.number(),
@@ -254,7 +254,7 @@ export const ListMasterAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),
@@ -296,7 +296,7 @@ export const GetMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),
@@ -331,7 +331,7 @@ export const RefreshMasterAccountStatusResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),
@@ -377,7 +377,7 @@ export const CreateSlaveAccountBody = zod.object({
   "broker": zod.string(),
   "server": zod.string(),
   "mt5Login": zod.string(),
-  "investorPassword": zod.string()
+  "tradingPassword": zod.string()
 })
 
 
@@ -518,7 +518,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "subscription": zod.object({
   "id": zod.number(),
   "userId": zod.number(),
-  "status": zod.enum(['active', 'expired', 'suspended']),
+  "status": zod.enum(['active', 'free_trial', 'expired', 'suspended']),
   "startDate": zod.coerce.date().nullish(),
   "endDate": zod.coerce.date().nullish(),
   "daysPaid": zod.number(),
@@ -569,7 +569,7 @@ export const ListAdminMasterAccountsResponseItem = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),
@@ -600,7 +600,7 @@ export const ApproveMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),
@@ -634,7 +634,7 @@ export const RejectMasterAccountResponse = zod.object({
   "mt5Login": zod.string(),
   "broker": zod.string(),
   "server": zod.string(),
-  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'disconnected', 'failed', 'error', 'rejected']),
+  "status": zod.enum(['pending_approval', 'pending', 'deploying', 'connecting', 'synchronizing', 'connected', 'active', 'disconnected', 'failed', 'error', 'rejected', 'suspended']),
   "deploymentStatus": zod.string().nullish(),
   "connectionStatus": zod.string().nullish(),
   "synchronizationStatus": zod.string().nullish(),

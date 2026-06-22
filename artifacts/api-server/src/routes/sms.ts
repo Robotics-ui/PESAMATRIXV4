@@ -218,7 +218,7 @@ router.get("/admin/sms/templates", authenticate, requireAdmin, async (_req, res)
 });
 
 router.put("/admin/sms/templates/:eventType", authenticate, requireAdmin, async (req, res): Promise<void> => {
-  const { eventType } = req.params;
+  const eventType = String(req.params.eventType);
   const { template, enabled } = req.body as { template?: string; enabled?: boolean };
 
   const [existing] = await db

@@ -97,6 +97,7 @@ export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof Subscrip
 
 export const SubscriptionStatus = {
   active: 'active',
+  free_trial: 'free_trial',
   expired: 'expired',
   suspended: 'suspended',
 } as const;
@@ -198,10 +199,12 @@ export const MasterAccountStatus = {
   connecting: 'connecting',
   synchronizing: 'synchronizing',
   connected: 'connected',
+  active: 'active',
   disconnected: 'disconnected',
   failed: 'failed',
   error: 'error',
   rejected: 'rejected',
+  suspended: 'suspended',
 } as const;
 
 export interface MasterAccount {
@@ -251,7 +254,7 @@ export interface SlaveAccountInput {
   broker: string;
   server: string;
   mt5Login: string;
-  investorPassword: string;
+  tradingPassword: string;
 }
 
 export type SlaveAccountStatus = typeof SlaveAccountStatus[keyof typeof SlaveAccountStatus];

@@ -70,7 +70,7 @@ export default function SlaveAccountsPage() {
   const { data: accounts, isLoading } = useListSlaveAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ mt5Login: "", investorPassword: "", server: "", broker: "", platform: "mt5" });
+  const [form, setForm] = useState({ mt5Login: "", tradingPassword: "", server: "", broker: "", platform: "mt5" });
   const [error, setError] = useState("");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -111,7 +111,7 @@ export default function SlaveAccountsPage() {
     mutation: {
       onSuccess: () => {
         setOpen(false);
-        setForm({ mt5Login: "", investorPassword: "", server: "", broker: "", platform: "mt5" });
+        setForm({ mt5Login: "", tradingPassword: "", server: "", broker: "", platform: "mt5" });
         void qc.invalidateQueries({ queryKey: getListSlaveAccountsQueryKey() });
       },
       onError: (err: unknown) => {
@@ -158,13 +158,13 @@ export default function SlaveAccountsPage() {
               {[
                 {
                   icon: KeyRound,
-                  title: "Get your investor password",
-                  detail: "Log into your broker portal or MT5/MT4 terminal and copy your investor (read-only) password — this is different from your main trading password.",
+                  title: "Get your trading (master) password",
+                  detail: "Log into your broker portal or MT5/MT4 terminal and copy your trading password (also called the master password). Do not use the investor/read-only password — CopyFactory requires full write access to open, modify, and close trades on your account.",
                 },
                 {
                   icon: Users,
-                  title: "Enter your login number and investor password",
-                  detail: "Your login is the account number shown in MT5 (e.g. 12345678). The investor password gives MetaApi read-only access — it cannot place trades.",
+                  title: "Enter your login number and trading password",
+                  detail: "Your login is the account number shown in MT5 (e.g. 12345678). The trading password is required so MetaApi's CopyFactory engine can execute copied trades on this account.",
                 },
                 {
                   icon: ServerIcon,
@@ -330,8 +330,8 @@ export default function SlaveAccountsPage() {
                   <Input placeholder="12345678" value={form.mt5Login} onChange={(e) => setForm({ ...form, mt5Login: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Investor Password</Label>
-                  <Input type="password" placeholder="••••••••" value={form.investorPassword} onChange={(e) => setForm({ ...form, investorPassword: e.target.value })} />
+                  <Label>Trading Password</Label>
+                  <Input type="password" placeholder="••••••••" value={form.tradingPassword} onChange={(e) => setForm({ ...form, tradingPassword: e.target.value })} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -358,8 +358,8 @@ export default function SlaveAccountsPage() {
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                disabled={creating || !form.mt5Login || !form.broker || !form.investorPassword || !form.server}
-                onClick={() => create({ data: { platform: form.platform as "mt4" | "mt5", mt5Login: form.mt5Login, investorPassword: form.investorPassword, server: form.server, broker: form.broker } })}
+                disabled={creating || !form.mt5Login || !form.broker || !form.tradingPassword || !form.server}
+                onClick={() => create({ data: { platform: form.platform as "mt4" | "mt5", mt5Login: form.mt5Login, tradingPassword: form.tradingPassword, server: form.server, broker: form.broker } })}
               >
                 {creating ? "Creating..." : "Add Account"}
               </Button>
