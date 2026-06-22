@@ -26,6 +26,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +51,7 @@ const navItems = [
   { href: "/contacts", label: "Contacts", icon: Phone },
   { href: "/settings/notifications", label: "SMS Preferences", icon: Bell },
   { href: "/referrals", label: "Referrals", icon: Gift },
+  { href: "/faq", label: "FAQ", icon: HelpCircle },
 ];
 
 const adminNavItems = [
@@ -60,6 +62,7 @@ const adminNavItems = [
   { href: "/admin/resources", label: "Resources", icon: BookOpen },
   { href: "/admin/announcements", label: "Announcements", icon: Bell },
   { href: "/admin/sms", label: "Bulk SMS", icon: MessageSquare },
+  { href: "/admin/faq", label: "FAQ Manager", icon: HelpCircle },
 ];
 
 export function Sidebar() {

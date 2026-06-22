@@ -33,6 +33,8 @@ import DiagnosticsPage from "@/pages/diagnostics";
 import AdminSmsPage from "@/pages/admin/sms-admin";
 import NotificationPreferencesPage from "@/pages/notification-preferences";
 import ReferralsPage from "@/pages/referrals";
+import FaqPage from "@/pages/faq";
+import AdminFaqPage from "@/pages/admin/faq-admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +81,8 @@ function Router() {
       <Route path="/market" component={MarketPulsePage} />
       <Route path="/forgot-password" component={() => <GuestRoute component={ForgotPasswordPage} />} />
       <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/faq" component={FaqPage} />
+      <Route path="/admin/faq" component={AdminFaqPage} />
       <Route path="/about" component={AboutPage} />
       <Route path="/contacts" component={ContactsPage} />
       <Route component={NotFound} />

@@ -23,3 +23,4 @@ export * from "./promoCodes";
 export * from "./referrals";
 export * from "./referralSettings";
 export * from "./notifications";
+export * from "./faqs";

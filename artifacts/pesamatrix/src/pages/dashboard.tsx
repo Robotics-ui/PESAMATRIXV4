@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Circle,
   RefreshCw,
+  HelpCircle,
+  ChevronRight,
 } from "lucide-react";
 
 interface CriticalAnnouncement {
@@ -362,6 +364,61 @@ function GettingStartedChecklist({
   );
 }
 
+// ── FAQ Widget ────────────────────────────────────────────────────────────────
+
+interface FaqItem { id: number; question: string; category: string; viewCount: number; }
+
+function FaqWidget() {
+  const { data: faqs = [] } = useQuery<FaqItem[]>({
+    queryKey: ["faqs-dashboard"],
+    queryFn: async () => {
+      const res = await fetch("/api/faqs");
+      if (!res.ok) return [];
+      return (res.json() as Promise<FaqItem[]>);
+    },
+    staleTime: 5 * 60 * 1000,
+    select: (data) =>
+      [...data].sort((a, b) => b.viewCount - a.viewCount).slice(0, 4),
+  });
+
+  if (faqs.length === 0) return null;
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-blue-400" />
+            Popular Questions
+          </CardTitle>
+          <Link href="/faq">
+            <button className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300">
+              View all <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </Link>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          {faqs.map((faq) => (
+            <Link key={faq.id} href="/faq">
+              <div className="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-muted/50 transition-colors cursor-pointer group">
+                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground shrink-0 group-hover:text-blue-400 transition-colors" />
+                <p className="text-sm text-foreground flex-1 leading-snug truncate group-hover:text-blue-300 transition-colors">
+                  {faq.question}
+                </p>
+                <Badge variant="outline" className="text-xs text-muted-foreground border-border shrink-0 hidden sm:flex">
+                  {faq.category}
+                </Badge>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Critical Announcements ────────────────────────────────────────────────────
 
 function CriticalAnnouncementBanner({ token }: { token: string | null }) {
@@ -618,6 +675,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Popular FAQs widget */}
+        <FaqWidget />
 
         {/* Recent trade logs */}
         {summary?.recentTradeLogs && summary.recentTradeLogs.length > 0 && (

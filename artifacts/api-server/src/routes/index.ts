@@ -19,6 +19,7 @@ import announcementsRouter from "./announcements";
 import forexRouter from "./forex";
 import smsRouter from "./sms";
 import referralsRouter from "./referrals";
+import faqsRouter from "./faqs";
 
 const router: IRouter = Router();
 
@@ -42,6 +43,7 @@ router.use(announcementsRouter);
 router.use(forexRouter);
 router.use(smsRouter);
 router.use(referralsRouter);
+router.use(faqsRouter);
 
 // Catch-all for unmatched /api routes — return JSON instead of falling through to the React app
 router.use((_req: Request, res: Response) => {
