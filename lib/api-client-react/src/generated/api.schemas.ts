@@ -598,6 +598,24 @@ export interface BannerSettings {
   selectedPairs: string[];
 }
 
+export interface CustomerCareSettings {
+  id: number;
+  phone1: string;
+  phone2?: string | null;
+  whatsapp: string;
+  email: string;
+  supportHours: string;
+  updatedAt?: string;
+}
+
+export interface CustomerCareSettingsUpdate {
+  phone1?: string;
+  phone2?: string | null;
+  whatsapp?: string;
+  email?: string;
+  supportHours?: string;
+}
+
 export interface BannerSettingsUpdate {
   enabled?: boolean;
   displayMode?: string;

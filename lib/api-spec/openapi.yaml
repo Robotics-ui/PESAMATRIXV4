@@ -34,6 +34,8 @@ tags:
     description: Dashboard summary operations
   - name: forex
     description: Forex market ticker and banner settings
+  - name: customerCare
+    description: Customer care contact settings
 
 paths:
   /healthz:
@@ -1011,6 +1013,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /customer-care:
+    get:
+      operationId: getCustomerCareSettings
+      tags: [customerCare]
+      summary: Get customer care contact settings (public)
+      responses:
+        "200":
+          description: Customer care settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerCareSettings"
+
+  /admin/customer-care:
+    put:
+      operationId: updateCustomerCareSettings
+      tags: [customerCare]
+      summary: Update customer care contact settings (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerCareSettingsUpdate"
+      responses:
+        "200":
+          description: Updated customer care settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerCareSettings"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -1790,6 +1830,42 @@ components:
           type: array
           items:
             type: string
+
+    CustomerCareSettings:
+      type: object
+      required: [id, phone1, whatsapp, email, supportHours]
+      properties:
+        id:
+          type: integer
+        phone1:
+          type: string
+        phone2:
+          type: string
+          nullable: true
+        whatsapp:
+          type: string
+        email:
+          type: string
+        supportHours:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    CustomerCareSettingsUpdate:
+      type: object
+      properties:
+        phone1:
+          type: string
+        phone2:
+          type: string
+          nullable: true
+        whatsapp:
+          type: string
+        email:
+          type: string
+        supportHours:
+          type: string
 
     BannerSettingsUpdate:
       type: object

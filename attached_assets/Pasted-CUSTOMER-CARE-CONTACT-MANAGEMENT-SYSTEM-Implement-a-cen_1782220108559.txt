@@ -1,0 +1,130 @@
+CUSTOMER CARE CONTACT MANAGEMENT SYSTEM
+
+Implement a centralized Customer Care Contact Management feature without affecting any existing functionality.
+
+OBJECTIVE
+
+Allow the administrator to configure and update customer care contact information from the Admin Panel.
+
+The configured information must automatically appear across the entire platform.
+
+FEATURE REQUIREMENTS
+
+1. Admin Settings Page
+
+Create a new Admin menu:
+
+Settings → Customer Care
+
+Fields:
+
+- Customer Care Phone Number 1
+- Customer Care Phone Number 2 (optional)
+- WhatsApp Number
+- Customer Care Email
+- Support Availability Text (e.g. Mon–Fri 8AM–6PM)
+
+Admin can:
+
+- Create
+- Edit
+- Save
+- Update
+
+Changes should take effect immediately.
+
+2. Global Footer Integration
+
+Display customer care information on:
+
+- Landing Page
+- Dashboard
+- Subscription Page
+- Master Accounts Page
+- Slave Accounts Page
+- Strategies Page
+- Admin Pages
+- All future pages
+
+Footer Example:
+
+Need Help?
+
+📞 +254717434943
+📞 +254781585319
+💬 WhatsApp: +254717434943
+✉ support@pesamatrix.com
+
+All phone numbers must be clickable.
+
+Clicking a phone number should:
+
+tel:+254717434943
+
+Clicking WhatsApp should open:
+
+https://wa.me/254717434943
+
+Clicking email should open:
+
+mailto:support@pesamatrix.com
+
+3. Landing Page Contact Section
+
+Add a dedicated Customer Support section.
+
+Display:
+
+- Phone
+- WhatsApp
+- Email
+- Support Hours
+
+Include a "Contact Support" button.
+
+4. Database Storage
+
+Create a settings table if one does not exist.
+
+Store:
+
+customerCarePhone1
+customerCarePhone2
+whatsappNumber
+supportEmail
+supportHours
+
+System should always load the latest values.
+
+5. Security
+
+Only Admin users can modify customer care settings.
+
+All other users have read-only access.
+
+6. Performance
+
+Load customer care settings once and reuse throughout the application.
+
+Avoid duplicate API requests on every page.
+
+7. Testing
+
+Verify:
+
+✓ Admin can update contact details
+✓ Changes appear on all pages
+✓ Phone numbers are clickable
+✓ WhatsApp opens correctly
+✓ Email opens correctly
+✓ Mobile responsive
+✓ No existing functionality affected
+
+Provide implementation report showing:
+
+- Files modified
+- Database changes
+- API endpoints added
+- Components updated
+- Tests performed
+- Results

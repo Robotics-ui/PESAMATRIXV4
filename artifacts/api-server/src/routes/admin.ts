@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, sum, count, desc } from "drizzle-orm";
 import crypto from "crypto";
-import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable, referralsTable, promoCodesTable } from "@workspace/db";
+import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable, referralsTable, promoCodesTable, customerCareSettingsTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
@@ -550,6 +550,70 @@ router.post("/admin/users/:id/generate-reset-link", authenticate, requireAdmin, 
     message: `Reset link generated for ${user.email}. It expires in 1 hour.`,
     resetLink,
   });
+});
+
+// Public customer care endpoint — no auth required
+router.get("/customer-care", async (_req, res): Promise<void> => {
+  const [settings] = await db
+    .select()
+    .from(customerCareSettingsTable)
+    .orderBy(customerCareSettingsTable.id)
+    .limit(1);
+
+  if (!settings) {
+    const [created] = await db
+      .insert(customerCareSettingsTable)
+      .values({})
+      .returning();
+    res.json(created);
+    return;
+  }
+
+  res.json(settings);
+});
+
+// Admin: update customer care settings
+router.put("/admin/customer-care", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const { phone1, phone2, whatsapp, email, supportHours } = req.body as {
+    phone1?: string;
+    phone2?: string | null;
+    whatsapp?: string;
+    email?: string;
+    supportHours?: string;
+  };
+
+  const [existing] = await db
+    .select({ id: customerCareSettingsTable.id })
+    .from(customerCareSettingsTable)
+    .orderBy(customerCareSettingsTable.id)
+    .limit(1);
+
+  if (existing) {
+    const [updated] = await db
+      .update(customerCareSettingsTable)
+      .set({
+        ...(phone1 !== undefined && { phone1 }),
+        ...(phone2 !== undefined && { phone2 }),
+        ...(whatsapp !== undefined && { whatsapp }),
+        ...(email !== undefined && { email }),
+        ...(supportHours !== undefined && { supportHours }),
+      })
+      .where(eq(customerCareSettingsTable.id, existing.id))
+      .returning();
+    res.json(updated);
+  } else {
+    const [created] = await db
+      .insert(customerCareSettingsTable)
+      .values({
+        phone1: phone1 ?? "",
+        phone2: phone2 ?? null,
+        whatsapp: whatsapp ?? "",
+        email: email ?? "",
+        supportHours: supportHours ?? "Mon-Fri 8AM-6PM",
+      })
+      .returning();
+    res.json(created);
+  }
 });
 
 export default router;

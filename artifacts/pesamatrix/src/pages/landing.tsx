@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   Phone,
   MessageCircle,
+  Mail,
+  Clock,
   ExternalLink,
   ArrowRight,
   ChevronRight,
@@ -22,6 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useGetCustomerCareSettings, getGetCustomerCareSettingsQueryKey } from "@workspace/api-client-react";
 
 const features = [
   { icon: Cloud, title: "Cloud-to-Cloud Trading", desc: "Trades are replicated automatically between MT5 accounts with zero manual intervention." },
@@ -209,6 +212,14 @@ function PricingSection({ pricing, isLoading }: { pricing: Pricing | null; isLoa
 export default function LandingPage() {
   const [pricing, setPricing] = useState<Pricing | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
+  const { data: care } = useGetCustomerCareSettings({ query: { queryKey: getGetCustomerCareSettingsQueryKey(), staleTime: 5 * 60 * 1000 } });
+
+  function cleanPhone(phone: string): string {
+    return phone.replace(/\s+/g, "");
+  }
+  function waNumber(phone: string): string {
+    return cleanPhone(phone).replace(/^\+/, "");
+  }
 
   useEffect(() => {
     fetch("/api/pricing")
@@ -386,43 +397,93 @@ export default function LandingPage() {
       {/* Pricing — live from API */}
       <PricingSection pricing={pricing} isLoading={pricingLoading} />
 
-      {/* Contact */}
+      {/* Customer Support */}
       <section id="contact" className="py-20 border-t border-border">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
             <Badge className="mb-4 bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20">
-              Get in Touch
+              Customer Support
             </Badge>
-            <h2 className="text-3xl font-bold text-foreground">Contact us</h2>
-            <p className="text-muted-foreground mt-3 text-sm">We are available via phone, WhatsApp, and TikTok.</p>
+            <h2 className="text-3xl font-bold text-foreground">We are here to help</h2>
+            <p className="text-muted-foreground mt-3 text-sm">
+              {care?.supportHours ? `Available ${care.supportHours}` : "Reach out via phone, WhatsApp, or email."}
+            </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-            <a
-              href="tel:+254717434943"
-              className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-blue-600/40 hover:bg-blue-600/5 transition-all group text-center"
-            >
-              <div className="h-12 w-12 rounded-xl bg-blue-600/20 border border-blue-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
-                <Phone className="h-6 w-6 text-blue-400" />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl mx-auto mb-8">
+            {care?.phone1 && (
+              <a
+                href={`tel:${cleanPhone(care.phone1)}`}
+                className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-blue-600/40 hover:bg-blue-600/5 transition-all group text-center"
+              >
+                <div className="h-12 w-12 rounded-xl bg-blue-600/20 border border-blue-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Phone className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Phone</p>
+                  <p className="text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors">{care.phone1}</p>
+                  {care.phone2 && <p className="text-xs text-muted-foreground mt-0.5">{care.phone2}</p>}
+                </div>
+              </a>
+            )}
+            {care?.phone2 && !care?.phone1 && (
+              <a
+                href={`tel:${cleanPhone(care.phone2)}`}
+                className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-blue-600/40 hover:bg-blue-600/5 transition-all group text-center"
+              >
+                <div className="h-12 w-12 rounded-xl bg-blue-600/20 border border-blue-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Phone className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Phone</p>
+                  <p className="text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors">{care.phone2}</p>
+                </div>
+              </a>
+            )}
+            {care?.whatsapp && (
+              <a
+                href={`https://wa.me/${waNumber(care.whatsapp)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-green-600/40 hover:bg-green-600/5 transition-all group text-center"
+              >
+                <div className="h-12 w-12 rounded-xl bg-green-600/20 border border-green-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <MessageCircle className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">WhatsApp</p>
+                  <p className="text-sm font-semibold text-foreground group-hover:text-green-400 transition-colors">{care.whatsapp}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Chat with us directly</p>
+                </div>
+              </a>
+            )}
+            {care?.email && (
+              <a
+                href={`mailto:${care.email}`}
+                className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-blue-600/40 hover:bg-blue-600/5 transition-all group text-center"
+              >
+                <div className="h-12 w-12 rounded-xl bg-blue-600/20 border border-blue-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Mail className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Email</p>
+                  <p className="text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors break-all">{care.email}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">We reply within 24h</p>
+                </div>
+              </a>
+            )}
+            {care?.supportHours && (
+              <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border text-center">
+                <div className="h-12 w-12 rounded-xl bg-green-600/20 border border-green-600/30 flex items-center justify-center">
+                  <Clock className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Support Hours</p>
+                  <p className="text-sm font-semibold text-foreground">{care.supportHours}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Phone</p>
-                <p className="text-sm font-semibold text-foreground group-hover:text-blue-400 transition-colors">+254 717 434 943</p>
-                <p className="text-xs text-muted-foreground mt-0.5">+254 781 585 319</p>
-              </div>
-            </a>
-            <a
-              href="https://wa.me/254717434943"
-              className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border border-border hover:border-green-600/40 hover:bg-green-600/5 transition-all group text-center"
-            >
-              <div className="h-12 w-12 rounded-xl bg-green-600/20 border border-green-600/30 flex items-center justify-center group-hover:scale-105 transition-transform">
-                <MessageCircle className="h-6 w-6 text-green-400" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">WhatsApp</p>
-                <p className="text-sm font-semibold text-foreground group-hover:text-green-400 transition-colors">+254 717 434 943</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Chat with us directly</p>
-              </div>
-            </a>
+            )}
+            {/* TikTok always shown */}
             <a
               href="https://tiktok.com/@pesamatrixsignals"
               target="_blank"
@@ -441,6 +502,20 @@ export default function LandingPage() {
               </div>
             </a>
           </div>
+
+          {(care?.phone1 || care?.whatsapp || care?.email) && (
+            <div className="flex justify-center">
+              <a href={care?.whatsapp ? `https://wa.me/${waNumber(care.whatsapp)}` : care?.email ? `mailto:${care.email}` : `tel:${cleanPhone(care?.phone1 ?? "")}`}
+                target={care?.whatsapp ? "_blank" : undefined}
+                rel={care?.whatsapp ? "noopener noreferrer" : undefined}
+              >
+                <Button className="bg-green-600 hover:bg-green-700 text-white px-8">
+                  Contact Support
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </a>
+            </div>
+          )}
         </div>
       </section>
 
@@ -462,9 +537,19 @@ export default function LandingPage() {
               <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
               <a href="#contact" className="hover:text-foreground transition-colors">Contact</a>
             </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              <a href="tel:+254717434943" className="hover:text-blue-400 transition-colors">+254717434943</a>
-              <a href="https://wa.me/254717434943" className="hover:text-green-400 transition-colors">WhatsApp</a>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              {care?.phone1 && (
+                <a href={`tel:${cleanPhone(care.phone1)}`} className="hover:text-blue-400 transition-colors">{care.phone1}</a>
+              )}
+              {care?.phone2 && (
+                <a href={`tel:${cleanPhone(care.phone2)}`} className="hover:text-blue-400 transition-colors">{care.phone2}</a>
+              )}
+              {care?.whatsapp && (
+                <a href={`https://wa.me/${waNumber(care.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="hover:text-green-400 transition-colors">WhatsApp</a>
+              )}
+              {care?.email && (
+                <a href={`mailto:${care.email}`} className="hover:text-blue-400 transition-colors">{care.email}</a>
+              )}
               <a
                 href="https://tiktok.com/@pesamatrixsignals"
                 target="_blank"

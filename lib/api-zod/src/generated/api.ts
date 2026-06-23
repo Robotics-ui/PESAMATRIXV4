@@ -982,3 +982,39 @@ export const UpdateBannerSettingsResponse = zod.object({
 })
 
 
+/**
+ * @summary Get customer care contact settings (public)
+ */
+export const GetCustomerCareSettingsResponse = zod.object({
+  "id": zod.number(),
+  "phone1": zod.string(),
+  "phone2": zod.string().nullish(),
+  "whatsapp": zod.string(),
+  "email": zod.string(),
+  "supportHours": zod.string(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update customer care contact settings (admin only)
+ */
+export const UpdateCustomerCareSettingsBody = zod.object({
+  "phone1": zod.string().optional(),
+  "phone2": zod.string().nullish(),
+  "whatsapp": zod.string().optional(),
+  "email": zod.string().optional(),
+  "supportHours": zod.string().optional()
+})
+
+export const UpdateCustomerCareSettingsResponse = zod.object({
+  "id": zod.number(),
+  "phone1": zod.string(),
+  "phone2": zod.string().nullish(),
+  "whatsapp": zod.string(),
+  "email": zod.string(),
+  "supportHours": zod.string(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+

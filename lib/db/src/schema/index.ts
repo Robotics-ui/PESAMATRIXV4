@@ -24,3 +24,4 @@ export * from "./referrals";
 export * from "./referralSettings";
 export * from "./notifications";
 export * from "./faqs";
+export * from "./customerCareSettings";

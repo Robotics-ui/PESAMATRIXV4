@@ -21,6 +21,9 @@ import {
   useGetForexRates,
   getGetForexRatesQueryKey,
   useAdminGenerateResetLink,
+  useGetCustomerCareSettings,
+  useUpdateCustomerCareSettings,
+  getGetCustomerCareSettingsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -155,6 +158,150 @@ function timeAgo(iso: string | null | undefined): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function CustomerCareSettingsTab() {
+  const qc = useQueryClient();
+  const { data: settings, isLoading } = useGetCustomerCareSettings({
+    query: { queryKey: getGetCustomerCareSettingsQueryKey() },
+  });
+  const { mutate: update, isPending: saving } = useUpdateCustomerCareSettings({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getGetCustomerCareSettingsQueryKey() });
+        setSaveStatus("saved");
+        setTimeout(() => setSaveStatus("idle"), 3000);
+      },
+      onError: () => setSaveStatus("error"),
+    },
+  });
+
+  const [form, setForm] = useState({
+    phone1: "",
+    phone2: "",
+    whatsapp: "",
+    email: "",
+    supportHours: "",
+  });
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    if (settings) {
+      setForm({
+        phone1: settings.phone1 ?? "",
+        phone2: settings.phone2 ?? "",
+        whatsapp: settings.whatsapp ?? "",
+        email: settings.email ?? "",
+        supportHours: settings.supportHours ?? "",
+      });
+    }
+  }, [settings]);
+
+  function handleSave() {
+    setSaveStatus("saving");
+    update({
+      data: {
+        phone1: form.phone1,
+        phone2: form.phone2 || null,
+        whatsapp: form.whatsapp,
+        email: form.email,
+        supportHours: form.supportHours,
+      },
+    });
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Phone className="h-4 w-4 text-blue-400" />
+          Customer Care Settings
+        </CardTitle>
+        <CardDescription>
+          Configure contact details shown across the entire platform
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 max-w-xl">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="cc-phone1">Phone Number 1</Label>
+            <Input
+              id="cc-phone1"
+              value={form.phone1}
+              onChange={(e) => setForm((f) => ({ ...f, phone1: e.target.value }))}
+              placeholder="+254717434943"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="cc-phone2">Phone Number 2 <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Input
+              id="cc-phone2"
+              value={form.phone2}
+              onChange={(e) => setForm((f) => ({ ...f, phone2: e.target.value }))}
+              placeholder="+254781585319"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cc-whatsapp">WhatsApp Number</Label>
+          <Input
+            id="cc-whatsapp"
+            value={form.whatsapp}
+            onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+            placeholder="+254717434943"
+          />
+          <p className="text-xs text-muted-foreground">Used to generate wa.me links</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cc-email">Support Email</Label>
+          <Input
+            id="cc-email"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="support@pesamatrix.com"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cc-hours">Support Availability</Label>
+          <Input
+            id="cc-hours"
+            value={form.supportHours}
+            onChange={(e) => setForm((f) => ({ ...f, supportHours: e.target.value }))}
+            placeholder="Mon-Fri 8AM-6PM"
+          />
+          <p className="text-xs text-muted-foreground">Displayed as availability text across the platform</p>
+        </div>
+        <div className="flex items-center gap-3 pt-2">
+          <Button
+            onClick={handleSave}
+            disabled={saving || saveStatus === "saving"}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
+          {saveStatus === "saved" && (
+            <div className="flex items-center gap-1 text-green-400 text-sm">
+              <CheckCircle2 className="h-4 w-4" /> Saved
+            </div>
+          )}
+          {saveStatus === "error" && (
+            <div className="flex items-center gap-1 text-destructive text-sm">
+              <AlertCircle className="h-4 w-4" /> Failed to save
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function SchedulerMonitorTab() {
@@ -1683,6 +1830,7 @@ export default function AdminPage() {
             <TabsTrigger value="settings">Settings</TabsTrigger>
             <TabsTrigger value="referrals">Referrals</TabsTrigger>
             <TabsTrigger value="banner">Market Banner</TabsTrigger>
+            <TabsTrigger value="customer-care">Customer Care</TabsTrigger>
           </TabsList>
 
           {/* Master Approvals tab */}
@@ -1922,6 +2070,11 @@ export default function AdminPage() {
           {/* Referral Settings tab */}
           <TabsContent value="referrals">
             <ReferralSettingsTab />
+          </TabsContent>
+
+          {/* Customer Care tab */}
+          <TabsContent value="customer-care">
+            <CustomerCareSettingsTab />
           </TabsContent>
 
           {/* Market Banner tab */}
