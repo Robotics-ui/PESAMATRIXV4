@@ -20,6 +20,12 @@ export const masterAccountsTable = pgTable("master_accounts", {
   metaapiRegion: text("metaapi_region"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // CopyFactory provider registration diagnostics
+  copyFactoryProviderId: text("copyfactory_provider_id"),
+  copyFactoryProviderStatus: text("copyfactory_provider_status"),
+  copyFactoryProviderRegisteredAt: timestamp("copyfactory_provider_registered_at", { withTimezone: true }),
+  copyFactoryLastApiResponse: text("copyfactory_last_api_response"),
+  copyFactoryLastError: text("copyfactory_last_error"),
 }, (table) => [
   index("master_accounts_user_id_idx").on(table.userId),
   index("master_accounts_status_idx").on(table.status),

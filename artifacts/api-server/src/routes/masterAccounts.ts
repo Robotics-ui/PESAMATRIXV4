@@ -4,7 +4,7 @@ import { db, masterAccountsTable } from "@workspace/db";
 import { CreateMasterAccountBody, GetMasterAccountParams, DeleteMasterAccountParams } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
 import { encryptCredential } from "../lib/auth";
-import { getMetaApiToken, callMetaApi, mapMetaApiState } from "../lib/metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState, registerMasterAsProvider } from "../lib/metaapi";
 import { logger } from "../lib/logger";
 import { writeAuditLog } from "../lib/accountPoller";
 
@@ -39,6 +39,11 @@ export function serializeAccount(a: typeof masterAccountsTable.$inferSelect) {
     rejectionReason: a.rejectionReason ?? null,
     lastCheckedAt: a.lastCheckedAt ?? null,
     createdAt: a.createdAt,
+    copyFactoryProviderId: a.copyFactoryProviderId ?? null,
+    copyFactoryProviderStatus: a.copyFactoryProviderStatus ?? null,
+    copyFactoryProviderRegisteredAt: a.copyFactoryProviderRegisteredAt ?? null,
+    copyFactoryLastApiResponse: a.copyFactoryLastApiResponse ?? null,
+    copyFactoryLastError: a.copyFactoryLastError ?? null,
   };
 }
 
@@ -87,6 +92,7 @@ export async function deployMasterToMetaApi(params: {
         type: params.platform === "mt4" ? "cloud-g1" : "cloud-g2",
         magic: Math.floor(Math.random() * 900000) + 100000,
         reliability: "regular",
+        roles: ["provider"],
       }
     );
 

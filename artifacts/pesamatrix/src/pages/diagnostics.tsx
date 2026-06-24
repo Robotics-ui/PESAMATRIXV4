@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   RefreshCw, Server, Users, WifiOff, Activity, Loader2,
   ChevronDown, ChevronRight, Globe, Hash, AlertTriangle, CheckCircle2, XCircle, Clock,
+  ShieldCheck, ShieldAlert, ShieldOff,
 } from "lucide-react";
 
 type AccountRecord = {
@@ -26,6 +27,11 @@ type AccountRecord = {
   lastCheckedAt: string | null;
   userEmail: string | null;
   rejectionReason?: string | null;
+  copyFactoryProviderId?: string | null;
+  copyFactoryProviderStatus?: string | null;
+  copyFactoryProviderRegisteredAt?: string | null;
+  copyFactoryLastApiResponse?: string | null;
+  copyFactoryLastError?: string | null;
 };
 
 type DiagnosticsData = {
@@ -71,8 +77,51 @@ function formatCheckedAt(ts: string | null): string {
   return new Date(ts).toLocaleTimeString();
 }
 
-function AccountRow({ a, type }: { a: AccountRecord; type: "master" | "slave" }) {
+function ProviderStatusBadge({ status }: { status: string | null | undefined }) {
+  if (status === "registered") return (
+    <span className="flex items-center gap-1 text-green-400 font-mono text-xs">
+      <ShieldCheck className="h-3.5 w-3.5" /> registered
+    </span>
+  );
+  if (status === "failed") return (
+    <span className="flex items-center gap-1 text-red-400 font-mono text-xs">
+      <ShieldAlert className="h-3.5 w-3.5" /> failed
+    </span>
+  );
+  return (
+    <span className="flex items-center gap-1 text-muted-foreground font-mono text-xs">
+      <ShieldOff className="h-3.5 w-3.5" /> not registered
+    </span>
+  );
+}
+
+function AccountRow({ a, type, token, onRefresh }: { a: AccountRecord; type: "master" | "slave"; token: string | null; onRefresh: () => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [registerMsg, setRegisterMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleRegisterProvider(e: React.MouseEvent) {
+    e.stopPropagation();
+    setRegistering(true);
+    setRegisterMsg(null);
+    try {
+      const res = await fetch(`/api/admin/master-accounts/${a.id}/register-provider`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json() as { ok?: boolean; message?: string; error?: string };
+      if (res.ok) {
+        setRegisterMsg({ ok: true, text: json.message ?? "Registered" });
+        setTimeout(() => { setRegisterMsg(null); onRefresh(); }, 2000);
+      } else {
+        setRegisterMsg({ ok: false, text: json.error ?? "Registration failed" });
+      }
+    } catch {
+      setRegisterMsg({ ok: false, text: "Network error" });
+    } finally {
+      setRegistering(false);
+    }
+  }
 
   return (
     <>
@@ -127,77 +176,166 @@ function AccountRow({ a, type }: { a: AccountRecord; type: "master" | "slave" })
       {expanded && (
         <tr className="border-b border-border/30">
           <td colSpan={9} className="px-8 py-4 bg-muted/10">
-            <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
-              {/* Left column */}
-              <div className="space-y-1.5">
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0 flex items-center gap-1"><Hash className="h-3 w-3" />Local DB ID:</span>
-                  <span className="font-mono text-foreground">#{a.id} ({type} account)</span>
+            <div className="space-y-4">
+              {/* MetaApi / lifecycle grid */}
+              <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
+                {/* Left column */}
+                <div className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0 flex items-center gap-1"><Hash className="h-3 w-3" />Local DB ID:</span>
+                    <span className="font-mono text-foreground">#{a.id} ({type} account)</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Real MetaApi UUID:</span>
+                    <span className="font-mono text-blue-300 break-all">
+                      {a.metaapiAccountId ?? "Not yet assigned — MetaApi deployment has not run"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">MetaApi Region:</span>
+                    <span className="font-mono text-foreground">{a.metaapiRegion ?? "Unknown"}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Broker Server:</span>
+                    <span className="font-mono text-foreground">{a.server}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Owner (User ID):</span>
+                    <span className="font-mono text-foreground">{a.userEmail ?? `uid:${a.userId}`}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Created:</span>
+                    <span className="font-mono text-foreground">{new Date(a.lastCheckedAt ?? "").toLocaleString() || "—"}</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Real MetaApi UUID:</span>
-                  <span className="font-mono text-blue-300 break-all">
-                    {a.metaapiAccountId ?? "Not yet assigned — MetaApi deployment has not run"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">MetaApi Region:</span>
-                  <span className="font-mono text-foreground">{a.metaapiRegion ?? "Unknown"}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Broker Server:</span>
-                  <span className="font-mono text-foreground">{a.server}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Owner (User ID):</span>
-                  <span className="font-mono text-foreground">{a.userEmail ?? `uid:${a.userId}`}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Created:</span>
-                  <span className="font-mono text-foreground">{new Date(a.lastCheckedAt ?? "").toLocaleString() || "—"}</span>
+                {/* Right column */}
+                <div className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Internal Status:</span>
+                    <span className="font-mono text-foreground">{a.status}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Deployment State:</span>
+                    <span className="font-mono text-foreground">{a.deploymentStatus ?? "—"}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Connection Status:</span>
+                    <span className={`font-mono ${a.connectionStatus === "CONNECTED" ? "text-green-400" : "text-foreground"}`}>
+                      {a.connectionStatus ?? "—"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Sync Status:</span>
+                    <span className={`font-mono ${a.synchronizationStatus === "SYNCHRONIZED" ? "text-green-400" : "text-foreground"}`}>
+                      {a.synchronizationStatus ?? "—"}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <span className="text-muted-foreground w-40 shrink-0">Last Checked:</span>
+                    <span className="font-mono text-foreground">
+                      {a.lastCheckedAt ? new Date(a.lastCheckedAt).toLocaleString() : "Never polled"}
+                    </span>
+                  </div>
+                  {a.lastErrorMessage && (
+                    <div className="flex gap-2">
+                      <span className="text-muted-foreground w-40 shrink-0 text-red-400">Last Error:</span>
+                      <span className="font-mono text-red-400 break-all">{a.lastErrorMessage}</span>
+                    </div>
+                  )}
+                  {a.rejectionReason && (
+                    <div className="flex gap-2">
+                      <span className="text-muted-foreground w-40 shrink-0 text-orange-400">Rejection Reason:</span>
+                      <span className="font-mono text-orange-400">{a.rejectionReason}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-              {/* Right column */}
-              <div className="space-y-1.5">
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Internal Status:</span>
-                  <span className="font-mono text-foreground">{a.status}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Deployment State:</span>
-                  <span className="font-mono text-foreground">{a.deploymentStatus ?? "—"}</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Connection Status:</span>
-                  <span className={`font-mono ${a.connectionStatus === "CONNECTED" ? "text-green-400" : "text-foreground"}`}>
-                    {a.connectionStatus ?? "—"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Sync Status:</span>
-                  <span className={`font-mono ${a.synchronizationStatus === "SYNCHRONIZED" ? "text-green-400" : "text-foreground"}`}>
-                    {a.synchronizationStatus ?? "—"}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="text-muted-foreground w-40 shrink-0">Last Checked:</span>
-                  <span className="font-mono text-foreground">
-                    {a.lastCheckedAt ? new Date(a.lastCheckedAt).toLocaleString() : "Never polled"}
-                  </span>
-                </div>
-                {a.lastErrorMessage && (
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground w-40 shrink-0 text-red-400">Last Error:</span>
-                    <span className="font-mono text-red-400 break-all">{a.lastErrorMessage}</span>
+
+              {/* CopyFactory provider section — masters only */}
+              {type === "master" && (
+                <div className="border-t border-border/40 pt-3 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="h-3 w-3" /> CopyFactory Provider Registration
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
+                    <div className="space-y-1.5">
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-40 shrink-0">Provider Status:</span>
+                        <ProviderStatusBadge status={a.copyFactoryProviderStatus} />
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-40 shrink-0">CF Provider ID:</span>
+                        <span className="font-mono text-blue-300 break-all">
+                          {a.copyFactoryProviderId ?? "—"}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-muted-foreground w-40 shrink-0">Registered At:</span>
+                        <span className="font-mono text-foreground">
+                          {a.copyFactoryProviderRegisteredAt
+                            ? new Date(a.copyFactoryProviderRegisteredAt).toLocaleString()
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {a.copyFactoryLastError && (
+                        <div className="flex gap-2">
+                          <span className="text-muted-foreground w-40 shrink-0 text-red-400">CF Last Error:</span>
+                          <span className="font-mono text-red-400 break-all text-xs">{a.copyFactoryLastError}</span>
+                        </div>
+                      )}
+                      {a.copyFactoryLastApiResponse && (
+                        <div className="flex gap-2">
+                          <span className="text-muted-foreground w-40 shrink-0">Last CF Response:</span>
+                          <span className="font-mono text-muted-foreground break-all text-xs line-clamp-3">{a.copyFactoryLastApiResponse}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-                {a.rejectionReason && (
-                  <div className="flex gap-2">
-                    <span className="text-muted-foreground w-40 shrink-0 text-orange-400">Rejection Reason:</span>
-                    <span className="font-mono text-orange-400">{a.rejectionReason}</span>
-                  </div>
-                )}
-              </div>
+                  {/* Register Provider button */}
+                  {a.metaapiAccountId && a.copyFactoryProviderStatus !== "registered" && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                        onClick={(e) => void handleRegisterProvider(e)}
+                        disabled={registering}
+                      >
+                        {registering
+                          ? <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Registering…</>
+                          : <><ShieldCheck className="h-3 w-3 mr-1.5" />Register as CopyFactory Provider</>}
+                      </Button>
+                      {registerMsg && (
+                        <span className={`text-xs font-mono ${registerMsg.ok ? "text-green-400" : "text-red-400"}`}>
+                          {registerMsg.text}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {a.copyFactoryProviderStatus === "registered" && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-muted/30 text-muted-foreground hover:bg-muted/10"
+                        onClick={(e) => void handleRegisterProvider(e)}
+                        disabled={registering}
+                      >
+                        {registering
+                          ? <><Loader2 className="h-3 w-3 mr-1.5 animate-spin" />Re-registering…</>
+                          : <><RefreshCw className="h-3 w-3 mr-1.5" />Re-register Provider</>}
+                      </Button>
+                      {registerMsg && (
+                        <span className={`text-xs font-mono ${registerMsg.ok ? "text-green-400" : "text-red-400"}`}>
+                          {registerMsg.text}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </td>
         </tr>
@@ -360,7 +498,7 @@ export default function DiagnosticsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.masters.map((a) => <AccountRow key={a.id} a={a} type="master" />)}
+                        {data.masters.map((a) => <AccountRow key={a.id} a={a} type="master" token={token} onRefresh={() => void qc.invalidateQueries({ queryKey: ["diagnostics"] })} />)}
                       </tbody>
                     </table>
                   </div>
@@ -394,7 +532,7 @@ export default function DiagnosticsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.slaves.map((a) => <AccountRow key={a.id} a={a} type="slave" />)}
+                        {data.slaves.map((a) => <AccountRow key={a.id} a={a} type="slave" token={token} onRefresh={() => void qc.invalidateQueries({ queryKey: ["diagnostics"] })} />)}
                       </tbody>
                     </table>
                   </div>

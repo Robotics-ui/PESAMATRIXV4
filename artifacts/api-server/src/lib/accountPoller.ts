@@ -1,6 +1,6 @@
 import { inArray, isNotNull, and, eq } from "drizzle-orm";
 import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAccountAuditLogsTable } from "@workspace/db";
-import { getMetaApiToken, callMetaApi, mapMetaApiState } from "./metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState, registerMasterAsProvider } from "./metaapi";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
@@ -67,12 +67,29 @@ async function hasStrategyForMaster(masterAccountId: number): Promise<boolean> {
 
 // ── Master lifecycle advancement (30s poller) ─────────────────────────────────
 
+async function ensureProviderRegistered(
+  id: number,
+  metaapiAccountId: string,
+  broker: string,
+  mt5Login: string,
+  copyFactoryProviderStatus: string | null
+): Promise<void> {
+  if (copyFactoryProviderStatus === "registered") return;
+  // Fire-and-forget — don't block lifecycle advancement
+  registerMasterAsProvider(id, metaapiAccountId, `${broker}-${mt5Login}`).catch((err) => {
+    logger.warn({ err, id }, "CopyFactory auto-provider registration failed");
+  });
+}
+
 async function advanceMasterAccount(
   id: number,
   metaapiAccountId: string,
   currentStatus: string,
   userId: number,
-  token: string
+  token: string,
+  broker: string,
+  mt5Login: string,
+  copyFactoryProviderStatus: string | null
 ): Promise<void> {
   try {
     const result = await callMetaApi<MetaApiAccountResponse>(
@@ -138,6 +155,12 @@ async function advanceMasterAccount(
         fromStatus: currentStatus,
         toStatus: newStatus,
       });
+    }
+
+    // Auto-register as CopyFactory provider when account first reaches a live state
+    const PROVIDER_ELIGIBLE = new Set(["deployed", "strategy_created", "active"]);
+    if (PROVIDER_ELIGIBLE.has(newStatus)) {
+      await ensureProviderRegistered(id, metaapiAccountId, broker, mt5Login, copyFactoryProviderStatus);
     }
   } catch (err) {
     logger.warn({ id, metaapiAccountId, err }, "Failed to advance master account lifecycle");
@@ -273,6 +296,9 @@ async function runPollerTick(): Promise<void> {
           metaapiAccountId: masterAccountsTable.metaapiAccountId,
           status: masterAccountsTable.status,
           userId: masterAccountsTable.userId,
+          broker: masterAccountsTable.broker,
+          mt5Login: masterAccountsTable.mt5Login,
+          copyFactoryProviderStatus: masterAccountsTable.copyFactoryProviderStatus,
         })
         .from(masterAccountsTable)
         .where(
@@ -305,7 +331,16 @@ async function runPollerTick(): Promise<void> {
       const chunk = masters.slice(i, i + CONCURRENCY);
       await Promise.allSettled(
         chunk.map((a) =>
-          advanceMasterAccount(a.id, a.metaapiAccountId!, a.status, a.userId, token)
+          advanceMasterAccount(
+            a.id,
+            a.metaapiAccountId!,
+            a.status,
+            a.userId,
+            token,
+            a.broker,
+            a.mt5Login,
+            a.copyFactoryProviderStatus ?? null
+          )
         )
       );
     }
@@ -347,6 +382,9 @@ async function runMonitorTick(): Promise<void> {
         metaapiAccountId: masterAccountsTable.metaapiAccountId,
         status: masterAccountsTable.status,
         userId: masterAccountsTable.userId,
+        broker: masterAccountsTable.broker,
+        mt5Login: masterAccountsTable.mt5Login,
+        copyFactoryProviderStatus: masterAccountsTable.copyFactoryProviderStatus,
       })
       .from(masterAccountsTable)
       .where(
@@ -371,6 +409,13 @@ async function runMonitorTick(): Promise<void> {
           monitorMasterAccount(a.id, a.metaapiAccountId!, a.status, a.userId, token)
         )
       );
+    }
+
+    // Catch existing active/suspended accounts that were deployed before provider registration existed
+    for (const a of masters) {
+      if (a.copyFactoryProviderStatus !== "registered") {
+        await ensureProviderRegistered(a.id, a.metaapiAccountId!, a.broker, a.mt5Login, a.copyFactoryProviderStatus ?? null);
+      }
     }
 
     logger.info(

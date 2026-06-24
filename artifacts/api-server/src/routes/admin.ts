@@ -5,7 +5,7 @@ import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, 
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
-import { invalidateMetaApiTokenCache } from "../lib/metaapi";
+import { invalidateMetaApiTokenCache, registerMasterAsProvider } from "../lib/metaapi";
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
@@ -449,6 +449,41 @@ router.post("/admin/scheduler/run", authenticate, requireAdmin, async (_req, res
 router.post("/admin/poller/run", authenticate, requireAdmin, async (_req, res): Promise<void> => {
   void runPollerNow();
   res.json({ message: "Account poller tick triggered" });
+});
+
+router.post("/admin/master-accounts/:id/register-provider", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const rawId = parseInt(String(req.params.id ?? ""), 10);
+  if (!rawId || rawId <= 0) {
+    res.status(400).json({ error: "Invalid account ID" });
+    return;
+  }
+
+  const [account] = await db
+    .select()
+    .from(masterAccountsTable)
+    .where(eq(masterAccountsTable.id, rawId));
+
+  if (!account) {
+    res.status(404).json({ error: "Master account not found" });
+    return;
+  }
+
+  if (!account.metaapiAccountId) {
+    res.status(400).json({ error: "Account has no MetaApi account ID — deploy it first" });
+    return;
+  }
+
+  const result = await registerMasterAsProvider(
+    account.id,
+    account.metaapiAccountId,
+    `${account.broker}-${account.mt5Login}`
+  );
+
+  if (result.ok) {
+    res.json({ ok: true, providerId: result.providerId, message: "CopyFactory provider registered successfully" });
+  } else {
+    res.status(502).json({ ok: false, error: result.error ?? "Provider registration failed" });
+  }
 });
 
 router.get("/admin/diagnostics", authenticate, requireAdmin, async (_req, res): Promise<void> => {
