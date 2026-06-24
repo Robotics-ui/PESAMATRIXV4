@@ -39,6 +39,11 @@ export function serializeAccount(a: typeof slaveAccountsTable.$inferSelect) {
     metaapiRegion: a.metaapiRegion ?? null,
     lastCheckedAt: a.lastCheckedAt ?? null,
     createdAt: a.createdAt,
+    copyFactorySubscriberId: a.copyFactorySubscriberId ?? null,
+    copyFactorySubscriberStatus: a.copyFactorySubscriberStatus ?? null,
+    copyFactorySubscriberRegisteredAt: a.copyFactorySubscriberRegisteredAt ?? null,
+    copyFactoryLastApiResponse: a.copyFactoryLastApiResponse ?? null,
+    copyFactoryLastError: a.copyFactoryLastError ?? null,
   };
 }
 

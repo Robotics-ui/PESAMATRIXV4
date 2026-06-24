@@ -20,6 +20,12 @@ export const slaveAccountsTable = pgTable("slave_accounts", {
   metaapiRegion: text("metaapi_region"),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // CopyFactory subscriber registration diagnostics
+  copyFactorySubscriberId: text("copyfactory_subscriber_id"),
+  copyFactorySubscriberStatus: text("copyfactory_subscriber_status"),
+  copyFactorySubscriberRegisteredAt: timestamp("copyfactory_subscriber_registered_at", { withTimezone: true }),
+  copyFactoryLastApiResponse: text("copyfactory_last_api_response"),
+  copyFactoryLastError: text("copyfactory_last_error"),
 }, (table) => [
   index("slave_accounts_user_id_idx").on(table.userId),
   index("slave_accounts_status_idx").on(table.status),
