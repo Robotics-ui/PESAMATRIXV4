@@ -92,7 +92,6 @@ export async function deployMasterToMetaApi(params: {
         type: params.platform === "mt4" ? "cloud-g1" : "cloud-g2",
         magic: Math.floor(Math.random() * 900000) + 100000,
         reliability: "regular",
-        roles: ["provider"],
       }
     );
 
