@@ -35,7 +35,7 @@ import {
   Shield, Users, CreditCard, Settings, RefreshCw, TrendingUp, AlertCircle,
   CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity,
   Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown, Radio, KeyRound,
-  Gift, Plus, Trash2, Pencil, List, ChevronLeft, ChevronRight, Phone, Mail,
+  Gift, Plus, Trash2, Pencil, List, ChevronLeft, ChevronRight, Phone, Mail, ChevronDown, ChevronUp, Cpu,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -617,12 +617,128 @@ function MasterApprovalStatusBadge({ status }: { status?: string | null }) {
   }
 }
 
+function CopyFactoryDiagnosticsRow({ acc, token, onRetrySuccess }: {
+  acc: {
+    id?: number | null;
+    metaapiAccountId?: string | null;
+    copyFactoryProviderId?: string | null;
+    copyFactoryProviderStatus?: string | null;
+    copyFactoryProviderRegisteredAt?: string | null;
+    copyFactoryLastApiResponse?: string | null;
+    copyFactoryLastError?: string | null;
+  };
+  token: string | null;
+  onRetrySuccess: () => void;
+}) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handleRetry = async () => {
+    if (!acc.id || !token) return;
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      const res = await fetch(`/api/admin/master-accounts/${acc.id}/register-provider`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json() as { message?: string; error?: string };
+      if (res.ok) {
+        setRetryMsg({ ok: true, text: body.message ?? "Registered successfully" });
+        onRetrySuccess();
+      } else {
+        setRetryMsg({ ok: false, text: body.error ?? `HTTP ${res.status}` });
+      }
+    } catch (e) {
+      setRetryMsg({ ok: false, text: e instanceof Error ? e.message : "Network error" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const status = acc.copyFactoryProviderStatus;
+  const isRegistered = status === "registered";
+
+  return (
+    <tr>
+      <td colSpan={6} className="pb-4 pt-1 pr-4">
+        <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Cpu className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+            <span className="text-xs font-semibold text-foreground">CopyFactory Provider Registration</span>
+            {isRegistered ? (
+              <Badge className="h-4 text-[10px] px-1.5 bg-green-500/15 text-green-400 border-green-500/20">Registered</Badge>
+            ) : status === "failed" ? (
+              <Badge className="h-4 text-[10px] px-1.5 bg-red-500/15 text-red-400 border-red-500/20">Failed</Badge>
+            ) : (
+              <Badge className="h-4 text-[10px] px-1.5 bg-muted/50 text-muted-foreground border-muted">Not Registered</Badge>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-muted-foreground">MetaApi Account ID</span>
+              <span className="font-mono text-foreground break-all">{acc.metaapiAccountId ?? "—"}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-muted-foreground">CopyFactory Provider ID</span>
+              <span className="font-mono text-foreground break-all">{acc.copyFactoryProviderId ?? "—"}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-muted-foreground">Provider Role Status</span>
+              <span className={isRegistered ? "text-green-400" : "text-muted-foreground"}>{status ?? "none"}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-muted-foreground">Registration Timestamp</span>
+              <span className="text-foreground">
+                {acc.copyFactoryProviderRegisteredAt
+                  ? new Date(acc.copyFactoryProviderRegisteredAt).toLocaleString()
+                  : "—"}
+              </span>
+            </div>
+          </div>
+          {acc.copyFactoryLastError && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">Last Error</span>
+              <p className="text-xs text-red-400 font-mono break-all">{acc.copyFactoryLastError}</p>
+            </div>
+          )}
+          {acc.copyFactoryLastApiResponse && (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted-foreground">Last API Response</span>
+              <p className="text-xs text-muted-foreground font-mono break-all truncate max-h-10 overflow-hidden">{acc.copyFactoryLastApiResponse}</p>
+            </div>
+          )}
+          {retryMsg && (
+            <div className={`text-xs px-2 py-1 rounded ${retryMsg.ok ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>
+              {retryMsg.text}
+            </div>
+          )}
+          {acc.metaapiAccountId && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs border-blue-500/30 text-blue-400 hover:bg-blue-500/10"
+              disabled={retrying}
+              onClick={() => void handleRetry()}
+            >
+              <RotateCcw className={`h-3 w-3 mr-1.5 ${retrying ? "animate-spin" : ""}`} />
+              {retrying ? "Retrying..." : "Retry Registration"}
+            </Button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function MasterApprovalsTab() {
   const qc = useQueryClient();
   const { data: accounts, isLoading, refetch } = useListAdminMasterAccounts();
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [expandedCfId, setExpandedCfId] = useState<number | null>(null);
+  const { token } = useAuth();
 
   const { mutate: approve, isPending: approving } = useApproveMasterAccount({
     mutation: {
@@ -739,34 +855,60 @@ function MasterApprovalsTab() {
                   <th className="text-left py-2 pr-4">Owner</th>
                   <th className="text-left py-2 pr-4">Status</th>
                   <th className="text-left py-2 pr-4">MetaApi ID</th>
-                  <th className="text-right py-2">Submitted</th>
+                  <th className="text-right py-2 pr-4">Submitted</th>
+                  <th className="text-right py-2">CF</th>
                 </tr>
               </thead>
               <tbody>
-                {rest.map((acc) => (
-                  <tr key={acc.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                    <td className="py-3 pr-4 font-medium text-foreground">{acc.mt5Login}</td>
-                    <td className="py-3 pr-4 text-muted-foreground text-xs">{acc.broker} · {acc.server}</td>
-                    <td className="py-3 pr-4 text-muted-foreground text-xs">
-                      {acc.userName ?? "—"}
-                      {acc.userEmail && <span className="block text-muted-foreground/60">{acc.userEmail}</span>}
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="space-y-1">
-                        <MasterApprovalStatusBadge status={acc.status} />
-                        {acc.rejectionReason && (
-                          <p className="text-xs text-red-300 max-w-xs">{acc.rejectionReason}</p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 pr-4 text-xs font-mono text-muted-foreground truncate max-w-[160px]">
-                      {acc.metaapiAccountId ?? "—"}
-                    </td>
-                    <td className="py-3 text-right text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(acc.createdAt!).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
+                {rest.map((acc) => {
+                  const cfExpanded = expandedCfId === acc.id;
+                  const cfStatus = acc.copyFactoryProviderStatus;
+                  return (
+                    <>
+                      <tr key={acc.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                        <td className="py-3 pr-4 font-medium text-foreground">{acc.mt5Login}</td>
+                        <td className="py-3 pr-4 text-muted-foreground text-xs">{acc.broker} · {acc.server}</td>
+                        <td className="py-3 pr-4 text-muted-foreground text-xs">
+                          {acc.userName ?? "—"}
+                          {acc.userEmail && <span className="block text-muted-foreground/60">{acc.userEmail}</span>}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className="space-y-1">
+                            <MasterApprovalStatusBadge status={acc.status} />
+                            {acc.rejectionReason && (
+                              <p className="text-xs text-red-300 max-w-xs">{acc.rejectionReason}</p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4 text-xs font-mono text-muted-foreground truncate max-w-[160px]">
+                          {acc.metaapiAccountId ?? "—"}
+                        </td>
+                        <td className="py-3 pr-4 text-right text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(acc.createdAt!).toLocaleDateString()}
+                        </td>
+                        <td className="py-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className={`h-6 w-6 p-0 ${cfStatus === "registered" ? "text-green-400" : cfStatus === "failed" ? "text-red-400" : "text-muted-foreground"}`}
+                            title="CopyFactory diagnostics"
+                            onClick={() => setExpandedCfId(cfExpanded ? null : (acc.id ?? null))}
+                          >
+                            {cfExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </Button>
+                        </td>
+                      </tr>
+                      {cfExpanded && (
+                        <CopyFactoryDiagnosticsRow
+                          key={`cf-${acc.id}`}
+                          acc={acc}
+                          token={token}
+                          onRetrySuccess={() => void refetch()}
+                        />
+                      )}
+                    </>
+                  );
+                })}
               </tbody>
             </table>
           </div>

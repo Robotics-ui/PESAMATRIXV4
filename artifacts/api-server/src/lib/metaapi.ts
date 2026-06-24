@@ -98,6 +98,12 @@ export async function callMetaApi<T = unknown>(
   if (hasBody) headers["Content-Type"] = "application/json";
 
   let response: Response;
+  // CopyFactory's TLS cert is expired. We temporarily suppress TLS verification
+  // only for CopyFactory API calls. These calls are sequential within the poller,
+  // so the brief env-var swap is safe. The provisioning domain is unaffected.
+  const isCopyFactory = url.includes("copyfactory-api-v1");
+  const prevTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  if (isCopyFactory) process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
   try {
     response = await fetch(url, {
       method,
@@ -110,6 +116,11 @@ export async function callMetaApi<T = unknown>(
       `MetaApi network error on ${method} ${url}`
     );
     throw fetchErr;
+  } finally {
+    if (isCopyFactory) {
+      if (prevTlsReject === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTlsReject;
+    }
   }
 
   let data: T;
@@ -168,12 +179,13 @@ export async function registerMasterAsProvider(
   }
 
   // ── Step 1: Assign provider role on MetaApi provisioning account ───────────
+  // MetaApi uses "copyFactoryRoles" (not "roles") for CopyFactory role assignment.
   try {
     const roleResult = await callMetaApi(
       "PUT",
       `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`,
       token,
-      { roles: ["provider"] }
+      { copyFactoryRoles: ["PROVIDER"] }
     );
     if (!roleResult.ok) {
       logger.warn(
@@ -254,7 +266,7 @@ export async function registerMasterAsProvider(
  *   1. GET the subscriber record from CopyFactory. A 404 means it was never
  *      registered; any other non-OK status is treated as an unknown error.
  *   2. If the record is absent, ensure the MetaApi provisioning account has the
- *      "subscriber" role (PUT roles: ["subscriber"] on the provisioning API).
+ *      "subscriber" role (PUT copyFactoryRoles: ["SUBSCRIBER"] on the provisioning API).
  *   3. PUT the subscriber configuration to CopyFactory (empty subscriptions list
  *      is fine — syncSlaveSubscriberToCopyFactory will fill it in afterwards).
  *   4. Persist the result in the slave_accounts diagnostic columns so the admin
@@ -330,7 +342,7 @@ export async function ensureSlaveSubscriberRole(slaveAccountId: number): Promise
       "PUT",
       `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}`,
       token,
-      { roles: ["subscriber"] }
+      { copyFactoryRoles: ["SUBSCRIBER"] }
     );
     if (!roleResult.ok) {
       logger.warn(

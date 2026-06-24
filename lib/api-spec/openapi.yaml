@@ -1327,6 +1327,17 @@ components:
         lastCheckedAt:
           type: ["string", "null"]
           format: date-time
+        copyFactoryProviderId:
+          type: ["string", "null"]
+        copyFactoryProviderStatus:
+          type: ["string", "null"]
+        copyFactoryProviderRegisteredAt:
+          type: ["string", "null"]
+          format: date-time
+        copyFactoryLastApiResponse:
+          type: ["string", "null"]
+        copyFactoryLastError:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time

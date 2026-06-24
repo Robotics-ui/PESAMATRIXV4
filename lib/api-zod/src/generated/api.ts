@@ -262,6 +262,11 @@ export const ListMasterAccountsResponseItem = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListMasterAccountsResponse = zod.array(ListMasterAccountsResponseItem)
@@ -304,6 +309,11 @@ export const GetMasterAccountResponse = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -339,6 +349,11 @@ export const RefreshMasterAccountStatusResponse = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -577,6 +592,11 @@ export const ListAdminMasterAccountsResponseItem = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),
@@ -608,6 +628,11 @@ export const ApproveMasterAccountResponse = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),
@@ -642,6 +667,11 @@ export const RejectMasterAccountResponse = zod.object({
   "metaapiRegion": zod.string().nullish(),
   "rejectionReason": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
+  "copyFactoryProviderId": zod.string().nullish(),
+  "copyFactoryProviderStatus": zod.string().nullish(),
+  "copyFactoryProviderRegisteredAt": zod.coerce.date().nullish(),
+  "copyFactoryLastApiResponse": zod.string().nullish(),
+  "copyFactoryLastError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }).and(zod.object({
   "userEmail": zod.string().nullish(),

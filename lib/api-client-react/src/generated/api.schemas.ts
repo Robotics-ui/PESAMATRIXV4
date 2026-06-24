@@ -231,6 +231,16 @@ export interface MasterAccount {
   rejectionReason?: string | null;
   /** @nullable */
   lastCheckedAt?: string | null;
+  /** @nullable */
+  copyFactoryProviderId?: string | null;
+  /** @nullable */
+  copyFactoryProviderStatus?: string | null;
+  /** @nullable */
+  copyFactoryProviderRegisteredAt?: string | null;
+  /** @nullable */
+  copyFactoryLastApiResponse?: string | null;
+  /** @nullable */
+  copyFactoryLastError?: string | null;
   createdAt: string;
 }
 
