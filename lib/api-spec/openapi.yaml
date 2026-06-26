@@ -932,6 +932,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminSettings"
 
+  # COPYFACTORY STRATEGIES (Admin)
+  /admin/copyfactory-strategies:
+    get:
+      operationId: listCopyFactoryStrategies
+      tags: [admin]
+      summary: List CopyFactory strategies stored in the local database
+      responses:
+        "200":
+          description: List of CopyFactory strategies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CopyFactoryStrategy"
+
+  /admin/copyfactory-strategies/sync:
+    post:
+      operationId: syncCopyFactoryStrategies
+      tags: [admin]
+      summary: Fetch strategies from CopyFactory API and sync to local database
+      responses:
+        "200":
+          description: Sync report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StrategySyncReport"
+
+  /admin/copyfactory-strategies/report:
+    get:
+      operationId: getCopyFactorySyncReport
+      tags: [admin]
+      summary: Get the last CopyFactory strategy sync report
+      responses:
+        "200":
+          description: Last sync report or null if never synced
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/StrategySyncReport"
+                  - type: "null"
+
   # FOREX
   /forex/rates:
     get:
@@ -1595,6 +1639,10 @@ components:
           type: integer
           minimum: 0
           description: Days before subscription expiry to send an SMS warning (0 = disabled)
+        activeStrategyId:
+          type: integer
+          nullable: true
+          description: ID of the locally-stored strategy to auto-bind new subscribers to
         updatedAt:
           type: string
           format: date-time
@@ -1618,6 +1666,9 @@ components:
           type: integer
           minimum: 0
           maximum: 30
+        activeStrategyId:
+          type: integer
+          nullable: true
 
     SchedulerRunLog:
       type: object
@@ -1877,6 +1928,66 @@ components:
           type: string
         supportHours:
           type: string
+
+    CopyFactoryStrategy:
+      type: object
+      required: [copyfactoryStrategyId, name, isActive]
+      properties:
+        copyfactoryStrategyId:
+          type: string
+        name:
+          type: string
+        localId:
+          type: integer
+          nullable: true
+        masterAccountId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    StrategySyncEntry:
+      type: object
+      required: [copyfactoryStrategyId, name, isNew]
+      properties:
+        copyfactoryStrategyId:
+          type: string
+        name:
+          type: string
+        localId:
+          type: integer
+          nullable: true
+        isNew:
+          type: boolean
+
+    StrategySyncReport:
+      type: object
+      required: [syncedAt, durationMs, fetched, created, updated, deactivated, errors, strategies]
+      properties:
+        syncedAt:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+        fetched:
+          type: integer
+        created:
+          type: integer
+        updated:
+          type: integer
+        deactivated:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+        strategies:
+          type: array
+          items:
+            $ref: "#/components/schemas/StrategySyncEntry"
 
     BannerSettingsUpdate:
       type: object

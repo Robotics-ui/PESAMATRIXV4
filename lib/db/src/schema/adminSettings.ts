@@ -10,6 +10,7 @@ export const adminSettingsTable = pgTable("admin_settings", {
   metaApiToken: text("meta_api_token"),
   expiryWarningDays: integer("expiry_warning_days").notNull().default(3),
   defaultTheme: text("default_theme").notNull().default("dark"),
+  activeStrategyId: integer("active_strategy_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

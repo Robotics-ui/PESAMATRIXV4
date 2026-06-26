@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { eq, inArray, and, or } from "drizzle-orm";
+import { syncCopyFactoryStrategies } from "./copyfactorySync";
 import {
   db,
   subscriptionsTable,
@@ -547,6 +548,14 @@ export function startScheduler(): void {
   cron.schedule("*/5 * * * *", () => {
     void runEnforcementTick();
     void runExpiryWarningTick();
+  });
+
+  // Sync CopyFactory strategies every 10 minutes so name changes / deletions
+  // made directly in CopyFactory are reflected in PesaMatrix automatically.
+  cron.schedule("*/10 * * * *", () => {
+    void syncCopyFactoryStrategies().catch((err) => {
+      logger.error({ err }, "Scheduled CopyFactory strategy sync failed");
+    });
   });
 
   logger.info(

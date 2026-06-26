@@ -31,6 +31,7 @@ import type {
   Binding,
   BindingInput,
   ChangePasswordInput,
+  CopyFactoryStrategy,
   CustomerCareSettings,
   CustomerCareSettingsUpdate,
   DashboardSummary,
@@ -58,6 +59,7 @@ import type {
   SlaveAccountInput,
   Strategy,
   StrategyInput,
+  StrategySyncReport,
   Subscription,
   TradeLog,
   User,
@@ -3458,6 +3460,230 @@ export const useUpdateAdminSettings = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateAdminSettingsMutationOptions(options));
     }
+
+export const getListCopyFactoryStrategiesUrl = () => {
+
+
+
+
+  return `/api/admin/copyfactory-strategies`
+}
+
+/**
+ * @summary List CopyFactory strategies stored in the local database
+ */
+export const listCopyFactoryStrategies = async ( options?: RequestInit): Promise<CopyFactoryStrategy[]> => {
+
+  return customFetch<CopyFactoryStrategy[]>(getListCopyFactoryStrategiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCopyFactoryStrategiesQueryKey = () => {
+    return [
+    `/api/admin/copyfactory-strategies`
+    ] as const;
+    }
+
+
+export const getListCopyFactoryStrategiesQueryOptions = <TData = Awaited<ReturnType<typeof listCopyFactoryStrategies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCopyFactoryStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCopyFactoryStrategiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCopyFactoryStrategies>>> = ({ signal }) => listCopyFactoryStrategies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCopyFactoryStrategies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCopyFactoryStrategiesQueryResult = NonNullable<Awaited<ReturnType<typeof listCopyFactoryStrategies>>>
+export type ListCopyFactoryStrategiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List CopyFactory strategies stored in the local database
+ */
+
+export function useListCopyFactoryStrategies<TData = Awaited<ReturnType<typeof listCopyFactoryStrategies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCopyFactoryStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCopyFactoryStrategiesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSyncCopyFactoryStrategiesUrl = () => {
+
+
+
+
+  return `/api/admin/copyfactory-strategies/sync`
+}
+
+/**
+ * @summary Fetch strategies from CopyFactory API and sync to local database
+ */
+export const syncCopyFactoryStrategies = async ( options?: RequestInit): Promise<StrategySyncReport> => {
+
+  return customFetch<StrategySyncReport>(getSyncCopyFactoryStrategiesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSyncCopyFactoryStrategiesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncCopyFactoryStrategies>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof syncCopyFactoryStrategies>>, TError,void, TContext> => {
+
+const mutationKey = ['syncCopyFactoryStrategies'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof syncCopyFactoryStrategies>>, void> = () => {
+
+
+          return  syncCopyFactoryStrategies(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SyncCopyFactoryStrategiesMutationResult = NonNullable<Awaited<ReturnType<typeof syncCopyFactoryStrategies>>>
+
+    export type SyncCopyFactoryStrategiesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Fetch strategies from CopyFactory API and sync to local database
+ */
+export const useSyncCopyFactoryStrategies = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof syncCopyFactoryStrategies>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof syncCopyFactoryStrategies>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSyncCopyFactoryStrategiesMutationOptions(options));
+    }
+
+export const getGetCopyFactorySyncReportUrl = () => {
+
+
+
+
+  return `/api/admin/copyfactory-strategies/report`
+}
+
+/**
+ * @summary Get the last CopyFactory strategy sync report
+ */
+export const getCopyFactorySyncReport = async ( options?: RequestInit): Promise<StrategySyncReport | null> => {
+
+  return customFetch<StrategySyncReport | null>(getGetCopyFactorySyncReportUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCopyFactorySyncReportQueryKey = () => {
+    return [
+    `/api/admin/copyfactory-strategies/report`
+    ] as const;
+    }
+
+
+export const getGetCopyFactorySyncReportQueryOptions = <TData = Awaited<ReturnType<typeof getCopyFactorySyncReport>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopyFactorySyncReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCopyFactorySyncReportQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCopyFactorySyncReport>>> = ({ signal }) => getCopyFactorySyncReport({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCopyFactorySyncReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCopyFactorySyncReportQueryResult = NonNullable<Awaited<ReturnType<typeof getCopyFactorySyncReport>>>
+export type GetCopyFactorySyncReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the last CopyFactory strategy sync report
+ */
+
+export function useGetCopyFactorySyncReport<TData = Awaited<ReturnType<typeof getCopyFactorySyncReport>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopyFactorySyncReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCopyFactorySyncReportQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetForexRatesUrl = () => {
 

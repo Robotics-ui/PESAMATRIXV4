@@ -4,7 +4,7 @@ import { db, masterAccountsTable } from "@workspace/db";
 import { CreateMasterAccountBody, GetMasterAccountParams, DeleteMasterAccountParams } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
 import { encryptCredential } from "../lib/auth";
-import { getMetaApiToken, callMetaApi, mapMetaApiState, registerMasterAsProvider } from "../lib/metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState, checkAndMarkProviderRole } from "../lib/metaapi";
 import { logger } from "../lib/logger";
 import { writeAuditLog } from "../lib/accountPoller";
 
@@ -111,6 +111,7 @@ export async function deployMasterToMetaApi(params: {
         deploymentStatus: null,
         lastErrorMessage: `Account creation failed: ${errMsg}`,
         metaapiRegion: null,
+        copyFactoryProviderStatus: null,
       };
     }
 
@@ -133,6 +134,7 @@ export async function deployMasterToMetaApi(params: {
         deploymentStatus: "DEPLOYING",
         lastErrorMessage: null,
         metaapiRegion,
+        copyFactoryProviderStatus: null,
       };
     } else {
       const deployData = deployResult.data as { message?: string } | null;
@@ -144,6 +146,7 @@ export async function deployMasterToMetaApi(params: {
         deploymentStatus: null,
         lastErrorMessage: `Deploy failed: ${errMsg}`,
         metaapiRegion,
+        copyFactoryProviderStatus: null,
       };
     }
   } catch (err) {
@@ -155,6 +158,7 @@ export async function deployMasterToMetaApi(params: {
       deploymentStatus: null,
       lastErrorMessage: `Network error: ${msg}`,
       metaapiRegion: null,
+      copyFactoryProviderStatus: null,
     };
   }
 }

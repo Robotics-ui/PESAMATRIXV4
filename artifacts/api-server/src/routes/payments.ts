@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { eq, desc } from "drizzle-orm";
-import { db, paymentsTable, subscriptionsTable, adminSettingsTable, bindingsTable, slaveAccountsTable, usersTable } from "@workspace/db";
+import { eq, desc, and } from "drizzle-orm";
+import { db, paymentsTable, subscriptionsTable, adminSettingsTable, bindingsTable, slaveAccountsTable, usersTable, strategiesTable } from "@workspace/db";
 import { InitiatePaymentBody } from "@workspace/api-zod";
 import { authenticate } from "../middlewares/authenticate";
 import { logger } from "../lib/logger";
-import { syncSlaveSubscriberToCopyFactory } from "../lib/metaapi";
+import { syncSlaveSubscriberToCopyFactory, ensureSlaveSubscriberRole } from "../lib/metaapi";
 import { notifyPaymentReceived, notifySubscriptionActivated } from "../lib/smsNotifier";
 
 const router = Router();
@@ -445,6 +445,50 @@ router.post("/payments/:checkoutRequestId/verify", authenticate, async (req, res
   }
 });
 
+async function autoBindToActiveStrategy(userId: number, slaveAccounts: Array<{ id: number }>): Promise<void> {
+  const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
+  if (!settings?.activeStrategyId) return;
+
+  const [activeStrategy] = await db
+    .select()
+    .from(strategiesTable)
+    .where(eq(strategiesTable.id, settings.activeStrategyId))
+    .limit(1);
+
+  if (!activeStrategy) {
+    logger.warn({ activeStrategyId: settings.activeStrategyId }, "Active strategy not found in DB — skipping auto-bind");
+    return;
+  }
+
+  for (const slave of slaveAccounts) {
+    try {
+      const [existingBinding] = await db
+        .select()
+        .from(bindingsTable)
+        .where(and(eq(bindingsTable.slaveAccountId, slave.id), eq(bindingsTable.strategyId, activeStrategy.id)))
+        .limit(1);
+
+      if (!existingBinding) {
+        await db.insert(bindingsTable).values({
+          strategyId: activeStrategy.id,
+          slaveAccountId: slave.id,
+          riskMultiplier: "1.00",
+          status: "active",
+        });
+        await ensureSlaveSubscriberRole(slave.id);
+        await syncSlaveSubscriberToCopyFactory(slave.id);
+        logger.info({ userId, slaveId: slave.id, strategyId: activeStrategy.id }, "Auto-bound slave to active strategy on subscription activation");
+      } else if (existingBinding.status === "suspended") {
+        await db.update(bindingsTable).set({ status: "active" }).where(eq(bindingsTable.id, existingBinding.id));
+        await syncSlaveSubscriberToCopyFactory(slave.id);
+        logger.info({ userId, slaveId: slave.id, strategyId: activeStrategy.id }, "Reactivated suspended binding to active strategy");
+      }
+    } catch (err) {
+      logger.error({ err, userId, slaveId: slave.id }, "Auto-bind to active strategy failed for slave");
+    }
+  }
+}
+
 async function activateSubscription(userId: number, days: number): Promise<void> {
   const [existing] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
 
@@ -453,6 +497,11 @@ async function activateSubscription(userId: number, days: number): Promise<void>
   function addTradingDaysLocal(start: Date, d: number): Date {
     return addTradingDays(start, d);
   }
+
+  const userSlaveAccounts = await db
+    .select()
+    .from(slaveAccountsTable)
+    .where(eq(slaveAccountsTable.userId, userId));
 
   if (!existing) {
     const endDate = addTradingDaysLocal(now, days);
@@ -463,6 +512,9 @@ async function activateSubscription(userId: number, days: number): Promise<void>
       endDate,
       daysPaid: days,
     });
+
+    // Auto-bind slave accounts to the platform's active strategy
+    await autoBindToActiveStrategy(userId, userSlaveAccounts);
   } else {
     // Extend from current end date if still active, otherwise from now
     const baseDate = existing.status === "active" && existing.endDate && existing.endDate > now
@@ -481,20 +533,16 @@ async function activateSubscription(userId: number, days: number): Promise<void>
       .where(eq(subscriptionsTable.userId, userId));
 
     // Reactivate suspended bindings and sync to CopyFactory
-    const userSlaveAccounts = await db
-      .select()
-      .from(slaveAccountsTable)
-      .where(eq(slaveAccountsTable.userId, userId));
-
     for (const slave of userSlaveAccounts) {
       await db
         .update(bindingsTable)
         .set({ status: "active" })
         .where(eq(bindingsTable.slaveAccountId, slave.id));
-
-      // Push restored subscriptions to CopyFactory
       await syncSlaveSubscriberToCopyFactory(slave.id);
     }
+
+    // Also ensure bound to active strategy (handles strategy change between subscriptions)
+    await autoBindToActiveStrategy(userId, userSlaveAccounts);
   }
 }
 

@@ -6,6 +6,7 @@ import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
 import { invalidateMetaApiTokenCache, checkAndMarkProviderRole } from "../lib/metaapi";
+import { syncCopyFactoryStrategies, getLastSyncReport } from "../lib/copyfactorySync";
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
@@ -237,9 +238,12 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
   if (parsed.data.maxDays != null) updates.maxDays = parsed.data.maxDays;
   if ("metaApiToken" in parsed.data) updates.metaApiToken = parsed.data.metaApiToken ?? null;
   if (parsed.data.expiryWarningDays != null) updates.expiryWarningDays = parsed.data.expiryWarningDays;
-  const rawBody = req.body as { defaultTheme?: string };
+  const rawBody = req.body as { defaultTheme?: string; activeStrategyId?: number | null };
   if (rawBody.defaultTheme && ["dark", "light", "system"].includes(rawBody.defaultTheme)) {
     updates.defaultTheme = rawBody.defaultTheme;
+  }
+  if ("activeStrategyId" in rawBody) {
+    updates.activeStrategyId = rawBody.activeStrategyId ?? null;
   }
 
   let settings;
@@ -261,6 +265,38 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
   invalidateMetaApiTokenCache();
 
   res.json({ ...settings, dailyFee: parseFloat(settings.dailyFee as string) });
+});
+
+// ─── CopyFactory Strategies ──────────────────────────────────────────────────
+
+router.get("/admin/copyfactory-strategies", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const [settings] = await db.select().from(adminSettingsTable).orderBy(adminSettingsTable.id).limit(1);
+  const strategies = await db.select().from(strategiesTable);
+  const result = strategies
+    .filter((s) => s.copyfactoryStrategyId)
+    .map((s) => ({
+      copyfactoryStrategyId: s.copyfactoryStrategyId,
+      name: s.strategyName,
+      localId: s.id,
+      masterAccountId: s.masterAccountId,
+      status: s.status,
+      isActive: settings?.activeStrategyId === s.id,
+    }));
+  res.json(result);
+});
+
+router.post("/admin/copyfactory-strategies/sync", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const report = await syncCopyFactoryStrategies();
+    res.json(report);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Sync failed: ${msg}` });
+  }
+});
+
+router.get("/admin/copyfactory-strategies/report", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  res.json(getLastSyncReport());
 });
 
 // ─── Master Account Approval ────────────────────────────────────────────────

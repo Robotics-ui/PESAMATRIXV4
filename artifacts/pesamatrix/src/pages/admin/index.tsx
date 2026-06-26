@@ -24,6 +24,11 @@ import {
   useGetCustomerCareSettings,
   useUpdateCustomerCareSettings,
   getGetCustomerCareSettingsQueryKey,
+  useListCopyFactoryStrategies,
+  useSyncCopyFactoryStrategies,
+  useGetCopyFactorySyncReport,
+  getListCopyFactoryStrategiesQueryKey,
+  getGetCopyFactorySyncReportQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +41,9 @@ import {
   CheckCircle2, Eye, EyeOff, Webhook, Copy, Check, XCircle, Activity,
   Clock, Zap, AlertTriangle, Link2, Link2Off, RotateCcw, Server, ThumbsUp, ThumbsDown, Radio, KeyRound,
   Gift, Plus, Trash2, Pencil, List, ChevronLeft, ChevronRight, Phone, Mail, ChevronDown, ChevronUp, Cpu,
+  Database,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -1921,6 +1928,233 @@ function ReferralSettingsTab() {
   );
 }
 
+// ─── CopyFactory Strategies Tab ──────────────────────────────────────────────
+
+function CopyFactoryStrategiesTab() {
+  const queryClient = useQueryClient();
+
+  const { data: strategies, isLoading: strategiesLoading, error: strategiesError } = useListCopyFactoryStrategies({
+    query: { queryKey: getListCopyFactoryStrategiesQueryKey() },
+  });
+
+  const { data: report } = useGetCopyFactorySyncReport({
+    query: { queryKey: getGetCopyFactorySyncReportQueryKey() },
+  });
+
+  const sync = useSyncCopyFactoryStrategies({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getListCopyFactoryStrategiesQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetCopyFactorySyncReportQueryKey() });
+      },
+    },
+  });
+
+  const updateSettings = useUpdateAdminSettings({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: getListCopyFactoryStrategiesQueryKey() });
+        void queryClient.invalidateQueries({ queryKey: getGetAdminSettingsQueryKey() });
+      },
+    },
+  });
+
+  const handleSetActive = (localId: number | null | undefined) => {
+    if (!localId) return;
+    updateSettings.mutate({ data: { activeStrategyId: localId } });
+  };
+
+  const handleClearActive = () => {
+    updateSettings.mutate({ data: { activeStrategyId: null } });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Database className="h-4 w-4 text-blue-400" />
+                CopyFactory Strategies
+              </CardTitle>
+              <CardDescription>
+                Strategies synced from your CopyFactory account. Set one as active to auto-bind new subscribers on payment.
+              </CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => sync.mutate()}
+              disabled={sync.isPending}
+              className="shrink-0"
+            >
+              <RefreshCw className={cn("h-4 w-4 mr-2", sync.isPending && "animate-spin")} />
+              {sync.isPending ? "Syncing..." : "Sync from CopyFactory"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {strategiesLoading ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">Loading strategies...</div>
+          ) : strategiesError ? (
+            <div className="flex items-center gap-2 text-sm text-red-400 py-4">
+              <XCircle className="h-4 w-4" />
+              Failed to load strategies
+            </div>
+          ) : !strategies || strategies.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-6 text-center">
+              No CopyFactory strategies found in the database. Click <span className="text-foreground">"Sync from CopyFactory"</span> to import them.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {strategies.map((strategy) => (
+                <div
+                  key={strategy.copyfactoryStrategyId}
+                  className={cn(
+                    "flex items-center justify-between rounded-lg border p-3 gap-3",
+                    strategy.isActive
+                      ? "border-green-500/40 bg-green-500/5"
+                      : "border-border bg-muted/20"
+                  )}
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{strategy.name}</span>
+                      {strategy.isActive && (
+                        <Badge className="bg-green-600/20 text-green-400 border-green-500/30 text-[10px]">
+                          Active
+                        </Badge>
+                      )}
+                      {strategy.status === "inactive" && (
+                        <Badge variant="outline" className="text-amber-400 border-amber-500/30 text-[10px]">
+                          Removed from CF
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span>
+                        CF ID: <span className="font-mono text-foreground/60">{strategy.copyfactoryStrategyId}</span>
+                      </span>
+                      {strategy.localId && (
+                        <span>Local ID: {strategy.localId}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {strategy.isActive ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10"
+                        onClick={handleClearActive}
+                        disabled={updateSettings.isPending}
+                      >
+                        <XCircle className="h-3.5 w-3.5 mr-1" />
+                        Clear
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs border-green-500/30 text-green-400 hover:bg-green-500/10"
+                        onClick={() => handleSetActive(strategy.localId)}
+                        disabled={updateSettings.isPending || !strategy.localId}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                        Set Active
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {report ? (
+        <Card className="border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              Last Sync Report
+            </CardTitle>
+            <CardDescription>
+              {new Date(report.syncedAt).toLocaleString()} — completed in {report.durationMs}ms
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="rounded-md bg-muted/30 border border-border/50 px-3 py-2 text-center">
+                <div className="text-xl font-semibold text-foreground">{report.fetched}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Fetched</div>
+              </div>
+              <div className="rounded-md bg-muted/30 border border-border/50 px-3 py-2 text-center">
+                <div className="text-xl font-semibold text-blue-400">{report.created}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Created</div>
+              </div>
+              <div className="rounded-md bg-muted/30 border border-border/50 px-3 py-2 text-center">
+                <div className="text-xl font-semibold text-green-400">{report.updated}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Updated</div>
+              </div>
+              <div className="rounded-md bg-muted/30 border border-border/50 px-3 py-2 text-center">
+                <div className="text-xl font-semibold text-amber-400">{report.deactivated}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Deactivated</div>
+              </div>
+            </div>
+
+            {report.errors.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-red-400 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {report.errors.length} error{report.errors.length !== 1 ? "s" : ""}
+                </div>
+                <div className="rounded-md border border-red-500/20 bg-red-500/5 p-3 space-y-1">
+                  {report.errors.map((err, i) => (
+                    <div key={i} className="text-xs text-red-300/80 font-mono break-all">{err}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {report.strategies.length > 0 && (
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-muted-foreground mb-2">Strategies in sync</div>
+                {report.strategies.map((s) => (
+                  <div
+                    key={s.copyfactoryStrategyId}
+                    className="flex items-center justify-between text-xs py-1.5 border-b border-border/40 last:border-0"
+                  >
+                    <span className="text-foreground/80 truncate">{s.name}</span>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      <span className="font-mono text-muted-foreground">{s.copyfactoryStrategyId}</span>
+                      {s.isNew && s.localId && (
+                        <Badge variant="outline" className="text-blue-400 border-blue-400/30 text-[10px]">
+                          imported
+                        </Badge>
+                      )}
+                      {s.isNew && !s.localId && (
+                        <Badge variant="outline" className="text-amber-400 border-amber-400/30 text-[10px]">
+                          unlinked
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="text-sm text-muted-foreground text-center py-2">
+          No sync has been run yet. Click "Sync from CopyFactory" to fetch strategies.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -2056,6 +2290,7 @@ export default function AdminPage() {
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="monitor">Enforcement Monitor</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="strategies">Strategies</TabsTrigger>
             <TabsTrigger value="referrals">Referrals</TabsTrigger>
             <TabsTrigger value="banner">Market Banner</TabsTrigger>
             <TabsTrigger value="customer-care">Customer Care</TabsTrigger>
@@ -2293,6 +2528,11 @@ export default function AdminPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* CopyFactory Strategies tab */}
+          <TabsContent value="strategies">
+            <CopyFactoryStrategiesTab />
           </TabsContent>
 
           {/* Referral Settings tab */}

@@ -433,6 +433,8 @@ export interface AdminSettings {
      * @minimum 0
      */
   expiryWarningDays: number;
+  /** ID of the locally-stored strategy to auto-bind new subscribers to */
+  activeStrategyId?: number | null;
   updatedAt?: string;
 }
 
@@ -449,6 +451,7 @@ export interface AdminSettingsUpdate {
      * @maximum 30
      */
   expiryWarningDays?: number;
+  activeStrategyId?: number | null;
 }
 
 export interface SchedulerRunLog {
@@ -624,6 +627,33 @@ export interface CustomerCareSettingsUpdate {
   whatsapp?: string;
   email?: string;
   supportHours?: string;
+}
+
+export interface CopyFactoryStrategy {
+  copyfactoryStrategyId: string;
+  name: string;
+  localId?: number | null;
+  masterAccountId?: number | null;
+  status?: string | null;
+  isActive: boolean;
+}
+
+export interface StrategySyncEntry {
+  copyfactoryStrategyId: string;
+  name: string;
+  localId?: number | null;
+  isNew: boolean;
+}
+
+export interface StrategySyncReport {
+  syncedAt: string;
+  durationMs: number;
+  fetched: number;
+  created: number;
+  updated: number;
+  deactivated: number;
+  errors: string[];
+  strategies: StrategySyncEntry[];
 }
 
 export interface BannerSettingsUpdate {

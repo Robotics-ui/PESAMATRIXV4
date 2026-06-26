@@ -860,6 +860,7 @@ export const GetAdminSettingsResponse = zod.object({
   "maxDays": zod.number(),
   "metaApiToken": zod.string().nullish(),
   "expiryWarningDays": zod.number().min(getAdminSettingsResponseExpiryWarningDaysMin).describe('Days before subscription expiry to send an SMS warning (0 = disabled)'),
+  "activeStrategyId": zod.number().nullish().describe('ID of the locally-stored strategy to auto-bind new subscribers to'),
   "updatedAt": zod.coerce.date().optional()
 })
 
@@ -881,7 +882,8 @@ export const UpdateAdminSettingsBody = zod.object({
   "minDays": zod.number().min(1).optional(),
   "maxDays": zod.number().max(updateAdminSettingsBodyMaxDaysMax).optional(),
   "metaApiToken": zod.string().nullish(),
-  "expiryWarningDays": zod.number().min(updateAdminSettingsBodyExpiryWarningDaysMin).max(updateAdminSettingsBodyExpiryWarningDaysMax).optional()
+  "expiryWarningDays": zod.number().min(updateAdminSettingsBodyExpiryWarningDaysMin).max(updateAdminSettingsBodyExpiryWarningDaysMax).optional(),
+  "activeStrategyId": zod.number().nullish()
 })
 
 export const updateAdminSettingsResponseExpiryWarningDaysMin = 0;
@@ -895,8 +897,63 @@ export const UpdateAdminSettingsResponse = zod.object({
   "maxDays": zod.number(),
   "metaApiToken": zod.string().nullish(),
   "expiryWarningDays": zod.number().min(updateAdminSettingsResponseExpiryWarningDaysMin).describe('Days before subscription expiry to send an SMS warning (0 = disabled)'),
+  "activeStrategyId": zod.number().nullish().describe('ID of the locally-stored strategy to auto-bind new subscribers to'),
   "updatedAt": zod.coerce.date().optional()
 })
+
+
+/**
+ * @summary List CopyFactory strategies stored in the local database
+ */
+export const ListCopyFactoryStrategiesResponseItem = zod.object({
+  "copyfactoryStrategyId": zod.string(),
+  "name": zod.string(),
+  "localId": zod.number().nullish(),
+  "masterAccountId": zod.number().nullish(),
+  "status": zod.string().nullish(),
+  "isActive": zod.boolean()
+})
+export const ListCopyFactoryStrategiesResponse = zod.array(ListCopyFactoryStrategiesResponseItem)
+
+
+/**
+ * @summary Fetch strategies from CopyFactory API and sync to local database
+ */
+export const SyncCopyFactoryStrategiesResponse = zod.object({
+  "syncedAt": zod.coerce.date(),
+  "durationMs": zod.number(),
+  "fetched": zod.number(),
+  "created": zod.number(),
+  "updated": zod.number(),
+  "deactivated": zod.number(),
+  "errors": zod.array(zod.string()),
+  "strategies": zod.array(zod.object({
+  "copyfactoryStrategyId": zod.string(),
+  "name": zod.string(),
+  "localId": zod.number().nullish(),
+  "isNew": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary Get the last CopyFactory strategy sync report
+ */
+export const GetCopyFactorySyncReportResponse = zod.union([zod.object({
+  "syncedAt": zod.coerce.date(),
+  "durationMs": zod.number(),
+  "fetched": zod.number(),
+  "created": zod.number(),
+  "updated": zod.number(),
+  "deactivated": zod.number(),
+  "errors": zod.array(zod.string()),
+  "strategies": zod.array(zod.object({
+  "copyfactoryStrategyId": zod.string(),
+  "name": zod.string(),
+  "localId": zod.number().nullish(),
+  "isNew": zod.boolean()
+}))
+}),zod.null()])
 
 
 /**
