@@ -77,65 +77,110 @@ export async function fetchCopyFactoryStrategies(): Promise<CopyFactoryStrategyR
  * attempts to register them in CopyFactory using the master account's region.
  * Called at server startup and from admin sync triggers.
  */
-export async function repairStrategyCopyFactoryIds(): Promise<void> {
+export type RepairReport = {
+  attempted: number;
+  repaired: number;
+  failed: number;
+  skipped: number;
+  details: Array<{ strategyId: number; strategyName: string; result: "repaired" | "failed" | "skipped"; error?: string }>;
+};
+
+/**
+ * Repair: finds strategies in the DB that have no copyfactoryStrategyId and
+ * attempts to register them in CopyFactory using the master account's region.
+ * Called at server startup and from the admin /repair endpoint.
+ * Returns a structured report of what was attempted and whether it succeeded.
+ */
+export async function repairStrategyCopyFactoryIds(): Promise<RepairReport> {
+  const report: RepairReport = { attempted: 0, repaired: 0, failed: 0, skipped: 0, details: [] };
+
   const token = await getMetaApiToken();
-  if (!token) return;
+  if (!token) return report;
 
   const broken = await db
     .select()
     .from(strategiesTable)
     .where(isNull(strategiesTable.copyfactoryStrategyId));
 
-  if (broken.length === 0) return;
+  if (broken.length === 0) return report;
 
   logger.info({ count: broken.length }, "Repairing strategies with missing CopyFactory IDs");
 
+  const genStratId = () =>
+    Array.from({ length: 4 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join("");
+
   for (const strategy of broken) {
+    report.attempted++;
     const [master] = await db
       .select()
       .from(masterAccountsTable)
       .where(eq(masterAccountsTable.id, strategy.masterAccountId));
 
     if (!master?.metaapiAccountId) {
-      logger.warn({ strategyId: strategy.id }, "Cannot repair strategy — master has no MetaApi account ID");
+      const err = "master has no MetaApi account ID";
+      logger.warn({ strategyId: strategy.id }, `Cannot repair strategy — ${err}`);
+      report.skipped++;
+      report.details.push({ strategyId: strategy.id, strategyName: strategy.strategyName, result: "skipped", error: err });
       continue;
     }
 
     const cfBase = getCopyFactoryApiBase(master.metaapiRegion ?? "vint-hill");
-    const stratId = `strategy-${Date.now()}`;
-
     const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    let repaired = false;
+    let lastError = "";
+
     try {
-      const response = await fetch(
-        `${cfBase}/users/current/configuration/strategies/${stratId}`,
-        {
-          method: "PUT",
-          headers: { "auth-token": token, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: strategy.strategyName,
-            positionLifecycle: "hedging",
-            connectionId: master.metaapiAccountId,
-          }),
+      for (let attempt = 0; attempt < 15 && !repaired; attempt++) {
+        const stratId = genStratId();
+        const response = await fetch(
+          `${cfBase}/users/current/configuration/strategies/${stratId}`,
+          {
+            method: "PUT",
+            headers: { "auth-token": token, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: strategy.strategyName,
+              positionLifecycle: "hedging",
+              connectionId: master.metaapiAccountId,
+            }),
+          }
+        );
+        if (response.ok) {
+          await db
+            .update(strategiesTable)
+            .set({ copyfactoryStrategyId: stratId })
+            .where(eq(strategiesTable.id, strategy.id));
+          logger.info({ strategyId: strategy.id, stratId, cfBase, attempt }, "Strategy CopyFactory ID repaired");
+          repaired = true;
+        } else {
+          const body = await response.text().catch(() => "");
+          lastError = `HTTP ${response.status}: ${body}`;
+          const isConflict = response.status === 409 || (response.status === 400 && body.includes("already exists"));
+          if (!isConflict) {
+            logger.warn({ strategyId: strategy.id, status: response.status, body, cfBase, attempt }, "Strategy CopyFactory repair failed — non-retryable error");
+            break;
+          }
+          logger.warn({ strategyId: strategy.id, stratId, attempt }, "CopyFactory strategy ID collision during repair — retrying");
         }
-      );
-      if (response.ok) {
-        await db
-          .update(strategiesTable)
-          .set({ copyfactoryStrategyId: stratId })
-          .where(eq(strategiesTable.id, strategy.id));
-        logger.info({ strategyId: strategy.id, stratId, cfBase }, "Strategy CopyFactory ID repaired");
-      } else {
-        const body = await response.text().catch(() => "");
-        logger.warn({ strategyId: strategy.id, status: response.status, body, cfBase }, "Strategy CopyFactory repair failed");
       }
     } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
       logger.warn({ err, strategyId: strategy.id }, "Strategy CopyFactory repair network error");
     } finally {
       if (prevTls === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
       else process.env.NODE_TLS_REJECT_UNAUTHORIZED = prevTls;
     }
+
+    if (repaired) {
+      report.repaired++;
+      report.details.push({ strategyId: strategy.id, strategyName: strategy.strategyName, result: "repaired" });
+    } else {
+      report.failed++;
+      report.details.push({ strategyId: strategy.id, strategyName: strategy.strategyName, result: "failed", error: lastError });
+    }
   }
+
+  return report;
 }
 
 export async function syncCopyFactoryStrategies(): Promise<StrategySyncReport> {

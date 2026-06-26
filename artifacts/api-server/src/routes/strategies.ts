@@ -128,29 +128,50 @@ router.post("/strategies", authenticate, async (req, res): Promise<void> => {
     const cfBase = getCopyFactoryApiBase(masterAccount.metaapiRegion ?? "vint-hill");
     const prevTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+    // CopyFactory strategy IDs must be exactly 4 alphanumeric characters (a-z, 0-9).
+    // Longer IDs or those with hyphens are rejected with HTTP 400 ValidationError.
+    // The 36^4 = 1.68M ID space is small, so we retry up to 15 times on conflict.
+    const genStratId = () =>
+      Array.from({ length: 4 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join("");
     try {
-      const stratId = `strategy-${Date.now()}`;
-      const response = await fetch(
-        `${cfBase}/users/current/configuration/strategies/${stratId}`,
-        {
-          method: "PUT",
-          headers: {
-            "auth-token": metaapiToken,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: strategyName,
-            positionLifecycle: "hedging",
-            connectionId: masterAccount.metaapiAccountId,
-          }),
+      let registered = false;
+      let lastError = "";
+      for (let attempt = 0; attempt < 15 && !registered; attempt++) {
+        const stratId = genStratId();
+        const response = await fetch(
+          `${cfBase}/users/current/configuration/strategies/${stratId}`,
+          {
+            method: "PUT",
+            headers: {
+              "auth-token": metaapiToken,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: strategyName,
+              positionLifecycle: "hedging",
+              connectionId: masterAccount.metaapiAccountId,
+            }),
+          }
+        );
+        if (response.ok) {
+          copyfactoryStrategyId = stratId;
+          registered = true;
+          logger.info({ stratId, masterAccountId, cfBase, attempt }, "CopyFactory strategy created");
+        } else {
+          const body = await response.text().catch(() => "");
+          lastError = `HTTP ${response.status}: ${body}`;
+          // Retry only on conflict (409) or validation errors that look like ID collisions.
+          // Any other error (auth, not-found, etc.) will break out after logging.
+          const isConflict = response.status === 409 || (response.status === 400 && body.includes("already exists"));
+          if (!isConflict) {
+            logger.warn({ status: response.status, stratId, body, cfBase, attempt }, "CopyFactory strategy creation returned non-OK — will not retry");
+            break;
+          }
+          logger.warn({ status: response.status, stratId, attempt }, "CopyFactory strategy ID collision — retrying with new ID");
         }
-      );
-      if (response.ok) {
-        copyfactoryStrategyId = stratId;
-        logger.info({ stratId, masterAccountId, cfBase }, "CopyFactory strategy created");
-      } else {
-        const body = await response.text().catch(() => "");
-        logger.warn({ status: response.status, stratId, body, cfBase }, "CopyFactory strategy creation returned non-OK");
+      }
+      if (!registered && copyfactoryStrategyId === null) {
+        logger.warn({ lastError, cfBase }, "CopyFactory strategy registration failed after all attempts — saved locally only. Use Admin > Repair to retry.");
       }
     } catch (err) {
       logger.warn({ err }, "CopyFactory strategy creation failed — storing locally only");

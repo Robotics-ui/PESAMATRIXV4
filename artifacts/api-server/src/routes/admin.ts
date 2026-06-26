@@ -6,7 +6,7 @@ import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
 import { invalidateMetaApiTokenCache, checkAndMarkProviderRole } from "../lib/metaapi";
-import { syncCopyFactoryStrategies, getLastSyncReport } from "../lib/copyfactorySync";
+import { syncCopyFactoryStrategies, getLastSyncReport, repairStrategyCopyFactoryIds } from "../lib/copyfactorySync";
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
@@ -297,6 +297,18 @@ router.post("/admin/copyfactory-strategies/sync", authenticate, requireAdmin, as
 
 router.get("/admin/copyfactory-strategies/report", authenticate, requireAdmin, async (_req, res): Promise<void> => {
   res.json(getLastSyncReport());
+});
+
+// Re-register any strategies that were saved locally but failed to register in CopyFactory
+// (e.g. because the old ID format was rejected by the API).
+router.post("/admin/copyfactory-strategies/repair", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    const report = await repairStrategyCopyFactoryIds();
+    res.json({ ok: report.failed === 0, ...report });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: `Repair failed: ${msg}` });
+  }
 });
 
 // ─── Master Account Approval ────────────────────────────────────────────────
