@@ -532,6 +532,21 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # STRATEGIES
+  /strategies/available:
+    get:
+      operationId: listAvailableStrategies
+      tags: [strategies]
+      summary: List all active platform strategies available for subscriber binding
+      responses:
+        "200":
+          description: List of strategies available to bind (any user may bind to these)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Strategy"
+
   /strategies:
     get:
       operationId: listStrategies

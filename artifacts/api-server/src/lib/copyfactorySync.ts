@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, strategiesTable, masterAccountsTable } from "@workspace/db";
+import { db, strategiesTable, masterAccountsTable, usersTable } from "@workspace/db";
 import { getMetaApiToken, callMetaApi } from "./metaapi";
 import { logger } from "./logger";
 
@@ -123,26 +123,56 @@ export async function syncCopyFactoryStrategies(): Promise<StrategySyncReport> {
             ? masterByMetaApiId.get(cfStrategy.connectionId)
             : null;
 
-          if (!master) {
-            const msg = `Strategy ${cfStrategy._id} ("${cfStrategy.name}") has no matching master account (connectionId: ${cfStrategy.connectionId ?? "none"}) — skipped`;
-            report.errors.push(msg);
-            logger.warn({ cfId: cfStrategy._id, connectionId: cfStrategy.connectionId }, msg);
-            report.strategies.push({
-              copyfactoryStrategyId: cfStrategy._id,
-              name: cfStrategy.name,
-              localId: null,
-              isNew: true,
-            });
-            continue;
+          // If no master account matches the CF connectionId, look for a master account
+          // whose metaapiAccountId we can use. Fall back to the first master in the DB
+          // (typically the admin's master), then further fall back to the admin user so
+          // that strategies created directly in CopyFactory can still be imported.
+          let resolvedMaster = master;
+          let resolvedUserId: number | null = null;
+
+          if (!resolvedMaster) {
+            if (allMasters.length > 0) {
+              resolvedMaster = allMasters[0];
+              logger.warn(
+                { cfId: cfStrategy._id, connectionId: cfStrategy.connectionId, fallbackMasterId: resolvedMaster.id },
+                "No master matched CF connectionId — falling back to first master in DB"
+              );
+            } else {
+              // No masters at all — fall back to the admin user without a master account
+              const [adminUser] = await db
+                .select({ id: usersTable.id })
+                .from(usersTable)
+                .where(eq(usersTable.role, "admin"))
+                .limit(1);
+
+              if (adminUser) {
+                resolvedUserId = adminUser.id;
+                logger.warn(
+                  { cfId: cfStrategy._id, connectionId: cfStrategy.connectionId },
+                  "No master accounts in DB — cannot import CF strategy without a master account. Skipped."
+                );
+              }
+
+              // Cannot create a strategy without a masterAccountId — skip
+              const msg = `Strategy ${cfStrategy._id} ("${cfStrategy.name}") skipped: no master accounts exist in the DB. Add a master account first, then re-sync.`;
+              report.errors.push(msg);
+              report.strategies.push({
+                copyfactoryStrategyId: cfStrategy._id,
+                name: cfStrategy.name,
+                localId: null,
+                isNew: true,
+              });
+              continue;
+            }
           }
 
           const [created] = await db
             .insert(strategiesTable)
             .values({
-              userId: master.userId,
+              userId: resolvedUserId ?? resolvedMaster!.userId,
               copyfactoryStrategyId: cfStrategy._id,
               strategyName: cfStrategy.name,
-              masterAccountId: master.id,
+              masterAccountId: resolvedMaster!.id,
               status: "active",
             })
             .returning();

@@ -5,8 +5,8 @@ import {
   useCreateBinding,
   useDeleteBinding,
   useListStrategies,
+  useListAvailableStrategies,
   useListSlaveAccounts,
-  useListMasterAccounts,
   getListBindingsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,24 +22,26 @@ import { useQueryClient } from "@tanstack/react-query";
 export default function BindingsPage() {
   const qc = useQueryClient();
   const { data: bindings, isLoading } = useListBindings();
-  const { data: strategies } = useListStrategies();
+  // Available strategies = all platform strategies whose master is CONNECTED+DEPLOYED
+  // (server-filtered, no client-side ownership restriction)
+  const { data: availableStrategies } = useListAvailableStrategies();
+  // Own strategies list is kept for display lookups in the bindings list
+  const { data: ownStrategies } = useListStrategies();
   const { data: slaveAccounts } = useListSlaveAccounts();
-  const { data: masterAccounts } = useListMasterAccounts();
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState({ strategyId: 0, slaveAccountId: 0, riskMultiplier: 1.0 });
   const [error, setError] = useState("");
 
-  // Per spec: only strategies whose master is ACTIVE can accept subscribers
-  const activeStrategies = (strategies ?? []).filter((s) => {
-    const master = (masterAccounts ?? []).find((m) => m.id === s.masterAccountId);
-    return master?.status === "active";
-  });
+  // Merge own + available strategies for display lookups (avoids missing strategy names in the list)
+  const allKnownStrategies = [
+    ...(ownStrategies ?? []),
+    ...(availableStrategies ?? []).filter(
+      (av) => !(ownStrategies ?? []).some((os) => os.id === av.id)
+    ),
+  ];
 
-  const hasInactiveStrategies =
-    (strategies ?? []).length > 0 && activeStrategies.length < (strategies ?? []).length;
-
-  const canCreate = !!(activeStrategies.length && slaveAccounts?.length);
+  const canCreate = !!(availableStrategies?.length && slaveAccounts?.length);
 
   const { mutate: create, isPending: creating } = useCreateBinding({
     mutation: {
@@ -91,27 +93,27 @@ export default function BindingsPage() {
                 {
                   icon: GitBranch,
                   title: "You need an active strategy and a slave account",
-                  detail: "The strategy's master account must have reached Active status. If the master is still deploying or connecting, wait for it to become Active before binding.",
+                  detail: "A platform strategy must be available (master Connected and Deployed). If none appear, contact the admin.",
                 },
                 {
                   icon: GitBranch,
                   title: "Select a strategy",
-                  detail: "The strategy is the signal source — it defines which master account's trades are copied. Only strategies with an Active master are available.",
+                  detail: "The strategy is the signal source — it defines which master account's trades are copied.",
                 },
                 {
                   icon: Users,
                   title: "Select a slave account",
-                  detail: "This is the follower account that will execute the copied trades. Make sure it is Connected (not Suspended or Failed) before binding.",
+                  detail: "This is the follower account that will execute the copied trades. Make sure it is Connected before binding.",
                 },
                 {
                   icon: Sliders,
                   title: "Set the risk multiplier",
-                  detail: "1.0 copies the exact lot size from the master. 0.5 = half lots (lower risk). 2.0 = double lots (higher risk). Start at 1.0 if unsure.",
+                  detail: "1.0 copies the exact lot size from the master. 0.5 = half lots (lower risk). 2.0 = double lots (higher risk).",
                 },
                 {
                   icon: ArrowRight,
                   title: "Copy trading starts immediately",
-                  detail: "The binding is registered in CopyFactory. From this point, every trade the master opens is replicated on your slave account in real time.",
+                  detail: "The binding is registered in CopyFactory. Every trade the master opens is replicated on your slave account in real time.",
                 },
               ].map(({ icon: Icon, title, detail }, i) => (
                 <li key={i} className="flex items-start gap-3">
@@ -130,45 +132,20 @@ export default function BindingsPage() {
         </Card>
 
         {/* No strategies or slave accounts at all */}
-        {!strategies?.length || !slaveAccounts?.length ? (
+        {(!availableStrategies?.length || !slaveAccounts?.length) && (
           <Card className="border-orange-500/30 bg-orange-500/5">
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center gap-2 text-sm text-orange-400">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                <p>You need at least one strategy and one slave account before creating bindings.</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* Strategies exist but none have an ACTIVE master */}
-        {strategies?.length && slaveAccounts?.length && !canCreate ? (
-          <Card className="border-yellow-500/30 bg-yellow-500/5">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-start gap-2 text-sm text-yellow-300">
-                <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
                 <p>
-                  No strategies are ready to accept subscribers yet. The master account must reach{" "}
-                  <span className="font-semibold text-green-400">Active</span> status before bindings can be created.
+                  {!slaveAccounts?.length
+                    ? "You need at least one slave account before creating bindings."
+                    : "No strategies are available for binding yet. Contact your admin to set up a strategy."}
                 </p>
               </div>
             </CardContent>
           </Card>
-        ) : null}
-
-        {/* Some strategies hidden because master not active */}
-        {canCreate && hasInactiveStrategies ? (
-          <Card className="border-blue-500/20 bg-blue-500/5">
-            <CardContent className="pt-3 pb-3">
-              <div className="flex items-center gap-2 text-xs text-blue-300">
-                <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-                <p>
-                  Some strategies are hidden because their master account is not yet active. Only active strategies are shown below.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-12">
@@ -188,17 +165,15 @@ export default function BindingsPage() {
         ) : (
           <div className="grid gap-4">
             {bindings.map((b) => {
-              const strategy = strategies?.find((s) => s.id === b.strategyId);
+              const strategy = allKnownStrategies.find((s) => s.id === b.strategyId);
               const slave = slaveAccounts?.find((s) => s.id === b.slaveAccountId);
-              const master = masterAccounts?.find((m) => m.id === strategy?.masterAccountId);
-              const masterActive = master?.status === "active";
               return (
-                <Card key={b.id} className={`border-border transition-colors ${masterActive ? "hover:border-green-500/30" : "hover:border-orange-500/30"}`}>
+                <Card key={b.id} className="border-border transition-colors hover:border-green-500/30">
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${masterActive ? "bg-green-600/10" : "bg-orange-500/10"}`}>
-                          <Link2 className={`h-5 w-5 ${masterActive ? "text-green-400" : "text-orange-400"}`} />
+                        <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0 bg-green-600/10">
+                          <Link2 className="h-5 w-5 text-green-400" />
                         </div>
                         <div className="flex items-center gap-2 flex-wrap flex-1">
                           <div className="flex flex-col min-w-0">
@@ -216,11 +191,6 @@ export default function BindingsPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-4">
-                        {!masterActive && master && (
-                          <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 text-xs">
-                            master {master.status}
-                          </Badge>
-                        )}
                         <Badge className={statusColor(b.status ?? undefined)}>{b.status ?? "pending"}</Badge>
                         <Button
                           variant="ghost"
@@ -252,7 +222,7 @@ export default function BindingsPage() {
               )}
               <div className="flex items-start gap-2 p-3 rounded bg-green-500/10 border border-green-500/20 text-green-300 text-xs">
                 <ShieldAlert className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                Only strategies with an <span className="font-semibold mx-1">Active</span> master account are available for binding.
+                Only strategies with a Connected and Deployed master are available for binding.
               </div>
               <div className="space-y-2">
                 <Label>Strategy</Label>
@@ -261,19 +231,16 @@ export default function BindingsPage() {
                   value={form.strategyId}
                   onChange={(e) => setForm({ ...form, strategyId: parseInt(e.target.value) })}
                 >
-                  <option value={0}>Select active strategy...</option>
-                  {activeStrategies.map((s) => {
-                    const master = masterAccounts?.find((m) => m.id === s.masterAccountId);
-                    return (
-                      <option key={s.id} value={s.id}>
-                        {s.strategyName}{master ? ` — ${master.mt5Login}` : ""}
-                      </option>
-                    );
-                  })}
+                  <option value={0}>Select strategy...</option>
+                  {(availableStrategies ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.strategyName}
+                    </option>
+                  ))}
                 </select>
-                {!activeStrategies.length && (
+                {!availableStrategies?.length && (
                   <p className="text-xs text-muted-foreground">
-                    No strategies available. The master account must be Active before binding.
+                    No strategies available yet. The master account must be Connected and Deployed before binding.
                   </p>
                 )}
               </div>

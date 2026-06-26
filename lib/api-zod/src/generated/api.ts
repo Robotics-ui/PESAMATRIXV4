@@ -432,6 +432,21 @@ export const RefreshSlaveAccountStatusResponse = zod.object({
 
 
 /**
+ * @summary List all active platform strategies available for subscriber binding
+ */
+export const ListAvailableStrategiesResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "copyfactoryStrategyId": zod.string().nullish(),
+  "strategyName": zod.string(),
+  "masterAccountId": zod.number(),
+  "status": zod.enum(['active', 'paused', 'error']),
+  "createdAt": zod.coerce.date()
+})
+export const ListAvailableStrategiesResponse = zod.array(ListAvailableStrategiesResponseItem)
+
+
+/**
  * @summary List current user's strategies
  */
 export const ListStrategiesResponseItem = zod.object({

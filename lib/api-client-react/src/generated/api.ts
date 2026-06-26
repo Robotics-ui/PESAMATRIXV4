@@ -1839,6 +1839,83 @@ export function useRefreshSlaveAccountStatus<TData = Awaited<ReturnType<typeof r
 
 
 
+export const getListAvailableStrategiesUrl = () => {
+
+
+
+
+  return `/api/strategies/available`
+}
+
+/**
+ * @summary List all active platform strategies available for subscriber binding
+ */
+export const listAvailableStrategies = async ( options?: RequestInit): Promise<Strategy[]> => {
+
+  return customFetch<Strategy[]>(getListAvailableStrategiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAvailableStrategiesQueryKey = () => {
+    return [
+    `/api/strategies/available`
+    ] as const;
+    }
+
+
+export const getListAvailableStrategiesQueryOptions = <TData = Awaited<ReturnType<typeof listAvailableStrategies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAvailableStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAvailableStrategiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAvailableStrategies>>> = ({ signal }) => listAvailableStrategies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAvailableStrategies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAvailableStrategiesQueryResult = NonNullable<Awaited<ReturnType<typeof listAvailableStrategies>>>
+export type ListAvailableStrategiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all active platform strategies available for subscriber binding
+ */
+
+export function useListAvailableStrategies<TData = Awaited<ReturnType<typeof listAvailableStrategies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAvailableStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAvailableStrategiesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getListStrategiesUrl = () => {
 
 

@@ -12,6 +12,37 @@ const router = Router();
 // Statuses that allow strategy creation (master must be at least deployed by MetaApi)
 const STRATEGY_ALLOWED_STATUSES = new Set(["deployed", "strategy_created", "active"]);
 
+// All active platform strategies whose master is CONNECTED + DEPLOYED.
+// Any authenticated user can query this — used by the Bindings page so
+// subscribers can bind to the admin's strategy without owning it themselves.
+router.get("/strategies/available", authenticate, async (_req, res): Promise<void> => {
+  const allActive = await db
+    .select()
+    .from(strategiesTable)
+    .where(eq(strategiesTable.status, "active"));
+
+  const BINDABLE_MASTER_STATUSES = new Set(["deployed", "strategy_created", "active"]);
+
+  const result = [];
+  for (const strategy of allActive) {
+    const [master] = await db
+      .select()
+      .from(masterAccountsTable)
+      .where(eq(masterAccountsTable.id, strategy.masterAccountId));
+
+    if (
+      master &&
+      BINDABLE_MASTER_STATUSES.has(master.status) &&
+      master.connectionStatus === "CONNECTED" &&
+      master.deploymentStatus === "DEPLOYED"
+    ) {
+      result.push(strategy);
+    }
+  }
+
+  res.json(result);
+});
+
 router.get("/strategies", authenticate, async (req, res): Promise<void> => {
   const strategies = await db
     .select()
