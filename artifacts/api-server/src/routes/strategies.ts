@@ -148,8 +148,8 @@ router.post("/strategies", authenticate, async (req, res): Promise<void> => {
             },
             body: JSON.stringify({
               name: strategyName,
-              positionLifecycle: "hedging",
-              connectionId: masterAccount.metaapiAccountId,
+              description: strategyName,
+              accountId: masterAccount.metaapiAccountId,
             }),
           }
         );

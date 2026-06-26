@@ -140,8 +140,8 @@ export async function repairStrategyCopyFactoryIds(): Promise<RepairReport> {
             headers: { "auth-token": token, "Content-Type": "application/json" },
             body: JSON.stringify({
               name: strategy.strategyName,
-              positionLifecycle: "hedging",
-              connectionId: master.metaapiAccountId,
+              description: strategy.strategyName,
+              accountId: master.metaapiAccountId,
             }),
           }
         );
