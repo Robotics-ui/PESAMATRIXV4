@@ -1,6 +1,6 @@
 import { inArray, isNotNull, and, eq } from "drizzle-orm";
 import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAccountAuditLogsTable } from "@workspace/db";
-import { getMetaApiToken, callMetaApi, mapMetaApiState, registerMasterAsProvider } from "./metaapi";
+import { getMetaApiToken, callMetaApi, mapMetaApiState, checkAndMarkProviderRole } from "./metaapi";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
@@ -78,7 +78,7 @@ async function ensureProviderRegistered(
   // Awaited — strategy creation is blocked until provider is registered, so we must
   // complete registration before the account can advance past "deployed".
   try {
-    await registerMasterAsProvider(id, metaapiAccountId, `${broker}-${mt5Login}`);
+    await checkAndMarkProviderRole(id, metaapiAccountId);
   } catch (err) {
     logger.warn({ err, id }, "CopyFactory auto-provider registration failed");
   }

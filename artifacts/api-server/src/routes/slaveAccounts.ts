@@ -127,6 +127,7 @@ router.post("/slave-accounts", authenticate, async (req, res): Promise<void> => 
           type: platform === "mt4" ? "cloud-g1" : "cloud-g2",
           magic: Math.floor(Math.random() * 900000) + 100000,
           reliability: "regular",
+          copyFactoryRoles: ["SUBSCRIBER"],
         }
       );
 

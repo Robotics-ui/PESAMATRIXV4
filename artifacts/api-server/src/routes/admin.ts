@@ -5,7 +5,7 @@ import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, 
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
-import { invalidateMetaApiTokenCache, registerMasterAsProvider } from "../lib/metaapi";
+import { invalidateMetaApiTokenCache, checkAndMarkProviderRole } from "../lib/metaapi";
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
@@ -473,16 +473,15 @@ router.post("/admin/master-accounts/:id/register-provider", authenticate, requir
     return;
   }
 
-  const result = await registerMasterAsProvider(
+  const result = await checkAndMarkProviderRole(
     account.id,
-    account.metaapiAccountId,
-    `${account.broker}-${account.mt5Login}`
+    account.metaapiAccountId
   );
 
   if (result.ok) {
-    res.json({ ok: true, providerId: result.providerId, message: "CopyFactory provider registered successfully" });
+    res.json({ ok: true, message: "CopyFactory provider role confirmed successfully" });
   } else {
-    res.status(502).json({ ok: false, error: result.error ?? "Provider registration failed" });
+    res.status(502).json({ ok: false, error: result.error ?? "Provider role check failed" });
   }
 });
 
