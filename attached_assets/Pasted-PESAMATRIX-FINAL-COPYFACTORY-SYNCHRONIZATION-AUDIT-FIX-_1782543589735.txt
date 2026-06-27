@@ -1,0 +1,126 @@
+PESAMATRIX - FINAL COPYFACTORY SYNCHRONIZATION AUDIT & FIX
+Do a complete end-to-end audit of the CopyFactory integration. Do not assume anything is working because accounts are being created.
+Verify the complete lifecycle from beginning to end.
+1. Master Account
+Verify MetaApi account creation.
+Verify deployment completes successfully.
+Verify CopyFactory Provider registration succeeds.
+Verify provider ID is stored in the database.
+Verify provider status changes to Registered.
+Verify the Provider exists inside CopyFactory dashboard.
+2. Slave Account
+Verify slave deployment.
+Verify subscriber registration.
+Verify subscriber ID is stored.
+Verify subscriber appears inside CopyFactory.
+Verify subscriber health.
+Verify subscriber synchronization status.
+3. Strategy
+This is the biggest concern.
+Verify:
+Strategy creation API.
+Strategy registration.
+Strategy synchronization.
+Strategy retrieval.
+Strategy update.
+Confirm:
+strategyId in database equals strategyId inside CopyFactory.
+copyfactoryStrategyId is never null.
+connectionId matches provider account.
+providerId matches registered provider.
+Strategy becomes Active.
+If strategy already exists in CopyFactory, synchronize it instead of creating duplicates.
+4. Binding
+Audit the complete binding pipeline.
+Verify:
+Master ↓
+Strategy ↓
+Subscriber ↓
+Binding ↓
+CopyFactory Subscription
+Confirm every foreign key and CopyFactory ID matches correctly.
+5. Active Strategy
+Verify:
+admin_settings.activeStrategyId
+is automatically populated after strategy creation.
+If NULL, determine why.
+6. CopyFactory API
+Log every request and response.
+For every API call log:
+URL
+Method
+Headers
+Payload
+Response
+HTTP Status
+Error body
+Especially:
+Providers
+Strategies
+Subscribers
+Subscriptions
+7. Database
+Compare database with CopyFactory.
+Check for:
+Missing Provider IDs
+Missing Subscriber IDs
+Missing Strategy IDs
+Broken foreign keys
+Duplicate IDs
+Orphan bindings
+Inactive strategies
+Inactive providers
+Inactive subscribers
+8. Worker Audit
+Verify every worker is actually running.
+Master Poller
+Slave Poller
+Strategy Sync
+Binding Sync
+Subscription Sync
+Health Monitor
+Reconnect Worker
+Repair Worker
+Print:
+Running
+Last execution
+Next execution
+Errors
+9. Auto Repair
+Automatically repair anything that is missing.
+If provider missing → register.
+If subscriber missing → register.
+If strategy missing → recreate or synchronize.
+If binding missing → recreate.
+If subscription missing → push again.
+If CopyFactory IDs differ → update database.
+Never create duplicates.
+10. End-to-End Test
+Create a complete test.
+Master Account
+↓
+Provider Registered
+↓
+Strategy Created
+↓
+Slave Registered
+↓
+Binding Created
+↓
+Subscription Sent
+↓
+Trade Copier Ready
+Produce a PASS or FAIL report for every step.
+11. Final Report
+Return:
+✅ Working components
+⚠️ Components with warnings
+❌ Broken components
+For every failure include:
+Root cause
+File name
+Function name
+Line number
+Exact fix applied
+Proof that the fix works
+Do not stop until the Master → Strategy → Slave → Binding → Subscription pipeline is fully operational and verified against both the database and the live CopyFactory API.
