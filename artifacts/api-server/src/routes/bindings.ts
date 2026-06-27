@@ -107,6 +107,36 @@ router.post("/bindings", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
+  // Prevent duplicate bindings for the same slave + strategy combination
+  const [existingBinding] = await db
+    .select({ id: bindingsTable.id, status: bindingsTable.status })
+    .from(bindingsTable)
+    .where(and(eq(bindingsTable.slaveAccountId, slaveAccountId), eq(bindingsTable.strategyId, strategyId)));
+
+  if (existingBinding) {
+    if (existingBinding.status === "active") {
+      res.status(400).json({ error: "A binding already exists between this slave account and strategy." });
+      return;
+    }
+    // Reactivate a suspended binding instead of creating a duplicate
+    const [reactivated] = await db
+      .update(bindingsTable)
+      .set({ status: "active" })
+      .where(eq(bindingsTable.id, existingBinding.id))
+      .returning();
+
+    if (master.status === "strategy_created") {
+      await db.update(masterAccountsTable).set({ status: "active" }).where(eq(masterAccountsTable.id, master.id));
+      await writeAuditLog({ masterAccountId: master.id, userId: master.userId, event: "first_binding_created", fromStatus: "strategy_created", toStatus: "active" });
+      logger.info({ masterAccountId: master.id }, "Master advanced to active on binding reactivation");
+    }
+
+    await ensureSlaveSubscriberRole(slaveAccountId);
+    await syncSlaveSubscriberToCopyFactory(slaveAccountId);
+    res.status(200).json({ ...reactivated, riskMultiplier: parseFloat(reactivated.riskMultiplier as string) });
+    return;
+  }
+
   const [binding] = await db
     .insert(bindingsTable)
     .values({

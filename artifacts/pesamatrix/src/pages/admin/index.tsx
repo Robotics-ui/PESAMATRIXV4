@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { CfSubscribersTab } from "./CfSubscribersTab";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -2294,6 +2295,7 @@ export default function AdminPage() {
             <TabsTrigger value="referrals">Referrals</TabsTrigger>
             <TabsTrigger value="banner">Market Banner</TabsTrigger>
             <TabsTrigger value="customer-care">Customer Care</TabsTrigger>
+            <TabsTrigger value="cf-subscribers">CF Subscribers</TabsTrigger>
           </TabsList>
 
           {/* Master Approvals tab */}
@@ -2543,6 +2545,11 @@ export default function AdminPage() {
           {/* Customer Care tab */}
           <TabsContent value="customer-care">
             <CustomerCareSettingsTab />
+          </TabsContent>
+
+          {/* CopyFactory Subscribers tab */}
+          <TabsContent value="cf-subscribers">
+            <CfSubscribersTab />
           </TabsContent>
 
           {/* Market Banner tab */}

@@ -699,6 +699,139 @@ router.get("/customer-care", async (_req, res): Promise<void> => {
   res.json(settings);
 });
 
+// ─── CopyFactory Subscriber Overview ────────────────────────────────────────
+
+router.get("/admin/copyfactory-subscribers", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const slaves = await db.select().from(slaveAccountsTable);
+  const users = await db.select().from(usersTable);
+  const subs = await db.select().from(subscriptionsTable);
+  const allBindings = await db.select().from(bindingsTable);
+  const allStrategies = await db.select().from(strategiesTable);
+
+  const result = slaves.map((slave) => {
+    const user = users.find((u) => u.id === slave.userId);
+    const sub = subs.find((s) => s.userId === slave.userId);
+    const slaveBindings = allBindings.filter((b) => b.slaveAccountId === slave.id);
+    const enrichedBindings = slaveBindings.map((b) => {
+      const strategy = allStrategies.find((s) => s.id === b.strategyId);
+      return {
+        id: b.id,
+        strategyId: b.strategyId,
+        strategyName: strategy?.strategyName ?? null,
+        copyfactoryStrategyId: strategy?.copyfactoryStrategyId ?? null,
+        status: b.status,
+        riskMultiplier: parseFloat(b.riskMultiplier as string),
+        createdAt: b.createdAt,
+        lastSyncedAt: b.lastSyncedAt ?? null,
+      };
+    });
+
+    return {
+      slaveAccountId: slave.id,
+      mt5Login: slave.mt5Login,
+      broker: slave.broker,
+      server: slave.server,
+      platform: slave.platform,
+      slaveStatus: slave.status,
+      connectionStatus: slave.connectionStatus ?? null,
+      userId: slave.userId,
+      userName: user?.name ?? null,
+      userEmail: user?.email ?? null,
+      copyFactorySubscriberId: slave.copyFactorySubscriberId ?? null,
+      copyFactorySubscriberStatus: slave.copyFactorySubscriberStatus ?? null,
+      copyFactorySubscriberRegisteredAt: slave.copyFactorySubscriberRegisteredAt ?? null,
+      copyFactoryLastSyncedAt: slave.copyFactoryLastSyncedAt ?? null,
+      copyFactoryLastError: slave.copyFactoryLastError ?? null,
+      subscriptionStatus: sub?.status ?? null,
+      subscriptionEndDate: sub?.endDate ?? null,
+      bindings: enrichedBindings,
+    };
+  });
+
+  res.json(result);
+});
+
+// ─── CopyFactory Verification Report ────────────────────────────────────────
+
+router.get("/admin/copyfactory-verify", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const masters = await db.select().from(masterAccountsTable);
+  const strategies = await db.select().from(strategiesTable);
+  const slaves = await db.select().from(slaveAccountsTable);
+  const users = await db.select().from(usersTable);
+  const subs = await db.select().from(subscriptionsTable);
+  const allBindings = await db.select().from(bindingsTable);
+
+  const issues: string[] = [];
+
+  // ── 1. Provider check ──────────────────────────────────────────────────────
+  const registeredProviders = masters.filter((m) => m.copyFactoryProviderStatus === "registered");
+  const providerOk = registeredProviders.length > 0;
+  if (!providerOk) issues.push("No master account is registered as a CopyFactory provider.");
+
+  // ── 2. Strategy check ──────────────────────────────────────────────────────
+  const activeWithCfId = strategies.filter((s) => s.status === "active" && s.copyfactoryStrategyId);
+  const strategyOk = activeWithCfId.length > 0;
+  if (!strategyOk) issues.push("No active strategies have a CopyFactory strategy ID.");
+  else if (strategies.some((s) => s.status === "active" && !s.copyfactoryStrategyId)) {
+    issues.push("Some active strategies are missing a CopyFactory strategy ID (repair needed).");
+  }
+
+  // ── 3. Subscriber check ────────────────────────────────────────────────────
+  const slavesWithSub = slaves.filter((s) => s.copyFactorySubscriberId);
+  const slavesWithoutSub = slaves.filter((s) => !s.copyFactorySubscriberId && s.metaapiAccountId);
+  if (slavesWithoutSub.length > 0) {
+    issues.push(`${slavesWithoutSub.length} slave account(s) not yet registered as CopyFactory subscribers.`);
+  }
+
+  // ── 4. Binding check ──────────────────────────────────────────────────────
+  const activeBindings = allBindings.filter((b) => b.status === "active");
+  const suspendedBindings = allBindings.filter((b) => b.status === "suspended");
+
+  // Check subscribers who have an active sub but no active binding
+  const activeSubs = subs.filter((s) => s.status === "active" || s.status === "free_trial");
+  for (const sub of activeSubs) {
+    const userSlaves = slaves.filter((s) => s.userId === sub.userId);
+    for (const slave of userSlaves) {
+      const hasActiveBinding = activeBindings.some((b) => b.slaveAccountId === slave.id);
+      if (!hasActiveBinding && slave.copyFactorySubscriberId) {
+        const user = users.find((u) => u.id === slave.userId);
+        issues.push(`Slave ${slave.mt5Login} (${user?.email ?? "unknown"}) has active subscription but no active binding.`);
+      }
+    }
+  }
+
+  const subscriberDetails = slaves.map((slave) => {
+    const slaveBindings = allBindings.filter((b) => b.slaveAccountId === slave.id);
+    const user = users.find((u) => u.id === slave.userId);
+    const sub = subs.find((s) => s.userId === slave.userId);
+    return {
+      slaveAccountId: slave.id,
+      mt5Login: slave.mt5Login,
+      broker: slave.broker,
+      userName: user?.name ?? null,
+      subscriberId: slave.copyFactorySubscriberId ?? null,
+      subscriberStatus: slave.copyFactorySubscriberStatus ?? null,
+      lastSyncedAt: slave.copyFactoryLastSyncedAt ?? null,
+      subscriptionStatus: sub?.status ?? null,
+      activeBindings: slaveBindings.filter((b) => b.status === "active").length,
+      suspendedBindings: slaveBindings.filter((b) => b.status === "suspended").length,
+    };
+  });
+
+  res.json({
+    generatedAt: new Date().toISOString(),
+    checks: {
+      providerExists: { ok: providerOk, count: registeredProviders.length, accountIds: registeredProviders.map((m) => m.metaapiAccountId) },
+      strategiesRegistered: { ok: strategyOk, total: strategies.length, withCfId: activeWithCfId.length, cfIds: activeWithCfId.map((s) => s.copyfactoryStrategyId) },
+      subscribersRegistered: { ok: slavesWithoutSub.length === 0, total: slaves.length, registered: slavesWithSub.length, unregistered: slavesWithoutSub.length },
+      bindingsActive: { ok: issues.length === 0, total: allBindings.length, active: activeBindings.length, suspended: suspendedBindings.length },
+    },
+    subscribers: subscriberDetails,
+    issues,
+    allGreen: issues.length === 0 && providerOk && strategyOk,
+  });
+});
+
 // Admin: update customer care settings
 router.put("/admin/customer-care", authenticate, requireAdmin, async (req, res): Promise<void> => {
   const { phone1, phone2, whatsapp, email, supportHours } = req.body as {

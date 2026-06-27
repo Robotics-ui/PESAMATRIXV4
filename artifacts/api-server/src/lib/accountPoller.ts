@@ -1,6 +1,7 @@
 import { inArray, isNotNull, isNull, and, eq } from "drizzle-orm";
-import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAccountAuditLogsTable } from "@workspace/db";
+import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAccountAuditLogsTable, bindingsTable } from "@workspace/db";
 import { getMetaApiToken, callMetaApi, mapMetaApiState, checkAndMarkProviderRole, ensureSlaveSubscriberRole } from "./metaapi";
+import { autoBindSlaveAccount } from "./autoBinding";
 import { logger } from "./logger";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
@@ -23,6 +24,8 @@ let monitorCount = 0;
 // Tracks slave IDs currently undergoing CopyFactory subscriber registration to prevent
 // duplicate concurrent attempts across poller ticks.
 const cfRegistrationInProgress = new Set<number>();
+// Tracks slave IDs currently undergoing auto-binding to prevent duplicate concurrent attempts.
+const cfAutoBindInProgress = new Set<number>();
 
 type MetaApiAccountResponse = {
   state?: string;
@@ -291,13 +294,20 @@ async function checkSingleSlaveAccount(
       "Slave account polled"
     );
 
-    // Auto-register as CopyFactory subscriber the first time the account becomes connected.
+    // Auto-register as CopyFactory subscriber AND auto-bind the first time the account becomes connected.
     if (newStatus === "connected" && !copyFactorySubscriberId && !cfRegistrationInProgress.has(id)) {
       cfRegistrationInProgress.add(id);
-      logger.info({ id, metaapiAccountId }, "Slave reached connected — triggering CopyFactory subscriber registration");
+      logger.info({ id, metaapiAccountId }, "Slave reached connected — triggering CopyFactory subscriber registration and auto-bind");
       ensureSlaveSubscriberRole(id)
-        .catch((err) => logger.warn({ id, metaapiAccountId, err }, "Auto CopyFactory subscriber registration failed during poll"))
+        .then(() => autoBindSlaveAccount(id))
+        .catch((err) => logger.warn({ id, metaapiAccountId, err }, "Auto CopyFactory subscriber registration/auto-bind failed during poll"))
         .finally(() => cfRegistrationInProgress.delete(id));
+    } else if (newStatus === "connected" && copyFactorySubscriberId && !cfAutoBindInProgress.has(id)) {
+      // Subscriber already registered — ensure bindings are up to date (handles strategy created after connect)
+      cfAutoBindInProgress.add(id);
+      autoBindSlaveAccount(id)
+        .catch((err) => logger.warn({ id, metaapiAccountId, err }, "Auto-bind (reconnect) failed during poll"))
+        .finally(() => cfAutoBindInProgress.delete(id));
     }
   } catch (err) {
     logger.warn({ id, metaapiAccountId, err }, "Failed to poll slave account");
@@ -396,15 +406,47 @@ async function runPollerTick(): Promise<void> {
       );
     }
 
-    // Fire-and-forget CopyFactory registration for slaves that are connected but unregistered.
-    // The in-progress set prevents duplicate concurrent attempts across ticks.
+    // Fire-and-forget CopyFactory registration + auto-bind for connected unregistered slaves.
     for (const slave of unregisteredConnected) {
       if (cfRegistrationInProgress.has(slave.id)) continue;
       cfRegistrationInProgress.add(slave.id);
       logger.info({ slaveId: slave.id }, "Auto-repair: connected slave missing CopyFactory subscriber registration");
       ensureSlaveSubscriberRole(slave.id)
-        .catch((err) => logger.warn({ slaveId: slave.id, err }, "Auto-repair CopyFactory subscriber registration failed"))
+        .then(() => autoBindSlaveAccount(slave.id))
+        .catch((err) => logger.warn({ slaveId: slave.id, err }, "Auto-repair CopyFactory subscriber registration/auto-bind failed"))
         .finally(() => cfRegistrationInProgress.delete(slave.id));
+    }
+
+    // Recovery: connected slaves that are registered as CF subscribers but have no active bindings.
+    // This handles the case where a strategy was created after the slave became connected.
+    const connectedRegistered = await db
+      .select({ id: slaveAccountsTable.id })
+      .from(slaveAccountsTable)
+      .where(
+        and(
+          eq(slaveAccountsTable.status, "connected"),
+          isNotNull(slaveAccountsTable.copyFactorySubscriberId),
+          isNotNull(slaveAccountsTable.metaapiAccountId)
+        )
+      );
+
+    if (connectedRegistered.length > 0) {
+      const activeBindingsRows = await db
+        .select({ slaveAccountId: bindingsTable.slaveAccountId })
+        .from(bindingsTable)
+        .where(eq(bindingsTable.status, "active"));
+
+      const boundSlaveIds = new Set(activeBindingsRows.map((b) => b.slaveAccountId));
+      const needingBind = connectedRegistered.filter((s) => !boundSlaveIds.has(s.id));
+
+      for (const slave of needingBind) {
+        if (cfAutoBindInProgress.has(slave.id)) continue;
+        cfAutoBindInProgress.add(slave.id);
+        logger.info({ slaveId: slave.id }, "Auto-bind recovery: connected subscriber missing active bindings");
+        autoBindSlaveAccount(slave.id)
+          .catch((err) => logger.warn({ slaveId: slave.id, err }, "Auto-bind recovery failed"))
+          .finally(() => cfAutoBindInProgress.delete(slave.id));
+      }
     }
 
     logger.info(

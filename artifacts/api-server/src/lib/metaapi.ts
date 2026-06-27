@@ -486,12 +486,13 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
     }
   }
 
+  const syncName = `${slave.broker} ${slave.mt5Login}`;
   try {
     const result = await callMetaApi(
       "PUT",
       `${cfBase}/users/current/configuration/subscribers/${slave.metaapiAccountId}`,
       token,
-      { subscriptions }
+      { name: syncName, subscriptions }
     );
 
     if (!result.ok) {
@@ -500,6 +501,19 @@ export async function syncSlaveSubscriberToCopyFactory(slaveAccountId: number): 
         "CopyFactory subscriber sync returned non-OK status"
       );
     } else {
+      const syncedAt = new Date();
+      await db
+        .update(slaveAccountsTable)
+        .set({ copyFactoryLastSyncedAt: syncedAt })
+        .where(eq(slaveAccountsTable.id, slaveAccountId));
+
+      for (const binding of activeBindings) {
+        await db
+          .update(bindingsTable)
+          .set({ lastSyncedAt: syncedAt })
+          .where(eq(bindingsTable.id, binding.id));
+      }
+
       logger.info(
         { slaveAccountId, metaapiAccountId: slave.metaapiAccountId, subscriptionCount: subscriptions.length },
         "CopyFactory subscriber synced successfully"

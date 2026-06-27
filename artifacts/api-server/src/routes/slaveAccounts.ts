@@ -44,6 +44,7 @@ export function serializeAccount(a: typeof slaveAccountsTable.$inferSelect) {
     copyFactorySubscriberRegisteredAt: a.copyFactorySubscriberRegisteredAt ?? null,
     copyFactoryLastApiResponse: a.copyFactoryLastApiResponse ?? null,
     copyFactoryLastError: a.copyFactoryLastError ?? null,
+    copyFactoryLastSyncedAt: a.copyFactoryLastSyncedAt ?? null,
   };
 }
 
