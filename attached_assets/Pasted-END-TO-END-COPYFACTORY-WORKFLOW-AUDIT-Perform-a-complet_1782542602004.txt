@@ -1,0 +1,109 @@
+END-TO-END COPYFACTORY WORKFLOW AUDIT
+Perform a complete end-to-end audit of the PesaMatrix platform without changing any existing working functionality.
+Objective
+Verify that the entire copy trading workflow functions correctly from Master Account creation to Subscriber trade copying.
+Verify the following in order:
+1. Master Account
+Verify master account registration.
+Verify MetaApi account creation.
+Verify deployment completes successfully.
+Verify connection status becomes Connected.
+Verify provider registration with CopyFactory.
+Verify provider status becomes Active.
+Verify all required IDs are stored correctly.
+2. Strategy
+Verify strategy creation.
+Verify strategy exists in CopyFactory.
+Verify Strategy ID is saved in the database.
+Verify strategy synchronization works correctly.
+3. Slave Account
+Verify slave account registration.
+Verify Trading Password (not Investor Password) is used.
+Verify credentials are encrypted securely.
+Verify MetaApi deployment succeeds.
+Verify subscriber creation in CopyFactory.
+Verify Subscriber ID is stored correctly.
+4. Binding
+Verify subscriber is automatically bound to the active strategy.
+Verify duplicate bindings are prevented.
+Verify binding status updates correctly.
+Verify unbinding works when a subscription expires.
+Verify rebinding works after renewal.
+5. Copy Trading
+Run a complete trade lifecycle test:
+Trade Open
+Stop Loss modification
+Take Profit modification
+Partial Close
+Full Close
+Confirm that all actions are replicated to subscriber accounts.
+6. Subscription Enforcement
+Verify:
+Only active subscribers receive copied trades.
+Expired subscribers are unbound within 5 minutes.
+Renewal restores binding automatically.
+Trial subscriptions behave correctly.
+7. Workers & Background Jobs
+Verify all workers are healthy and running:
+Deployment Worker
+Provider Registration Worker
+Strategy Worker
+Subscriber Worker
+Binding Worker
+Subscription Scheduler
+Renewal Scheduler
+SMS Worker
+WhatsApp Worker (if enabled)
+Notification Worker
+Webhook Worker
+Health Check Worker
+Reconnect Worker
+Cleanup Worker
+Ensure:
+No failed jobs
+No stuck jobs
+No overlapping cron executions
+No memory leaks
+No queue backlogs
+8. Webhooks
+Verify all webhooks are functioning:
+MetaApi webhook
+CopyFactory webhook
+M-Pesa callback
+SMS webhook (if applicable)
+Confirm webhook signatures are validated and events are processed successfully.
+9. Database Integrity
+Verify:
+No orphaned records
+Foreign keys are valid
+Master, Strategy, Subscriber and Binding relationships are correct
+No duplicate Provider IDs
+No duplicate Strategy IDs
+No duplicate Subscriber IDs
+No duplicate Binding IDs
+10. API Health
+Verify every API endpoint returns expected responses and no authentication or authorization issues exist.
+11. Security
+Verify:
+Trading passwords are encrypted using AES-256-GCM.
+Secrets are not exposed.
+API keys are secure.
+Role-based permissions are enforced.
+12. Performance
+Review:
+Database query performance
+API response times
+Worker performance
+CopyFactory synchronization speed
+Memory usage
+CPU usage
+Final Report
+Do not modify working functionality unless a defect is found.
+Provide a detailed report including:
+Components checked
+Tests performed
+Pass/Fail status for each component
+Any bugs or inconsistencies found
+Risks identified
+Recommended fixes (if any)
+Confirmation that the platform is production-ready or a list of remaining issues that should be resolved before onboarding large numbers of subscribers.

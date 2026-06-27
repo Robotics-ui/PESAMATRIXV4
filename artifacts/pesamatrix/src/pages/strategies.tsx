@@ -6,6 +6,7 @@ import {
   useDeleteStrategy,
   useListMasterAccounts,
   getListStrategiesQueryKey,
+  getListMasterAccountsQueryKey,
   type MasterAccount,
   type Strategy,
 } from "@workspace/api-client-react";
@@ -29,10 +30,10 @@ export default function StrategiesPage() {
   const [, navigate] = useLocation();
 
   const { data: strategies, isLoading } = useListStrategies({
-    query: { refetchInterval: 30_000 },
+    query: { queryKey: getListStrategiesQueryKey(), refetchInterval: 30_000 },
   });
   const { data: masterAccounts } = useListMasterAccounts({
-    query: { refetchInterval: 30_000 },
+    query: { queryKey: getListMasterAccountsQueryKey(), refetchInterval: 30_000 },
   });
   const [open, setOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
