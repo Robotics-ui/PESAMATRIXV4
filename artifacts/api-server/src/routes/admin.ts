@@ -255,6 +255,8 @@ router.patch("/admin/settings", authenticate, requireAdmin, async (req, res): Pr
       .values({ dailyFee: (parsed.data.dailyFee ?? 100).toString(), minDays: parsed.data.minDays ?? 1, maxDays: parsed.data.maxDays ?? 365, metaApiToken: parsed.data.metaApiToken ?? null })
       .returning();
     settings = created;
+  } else if (Object.keys(updates).length === 0) {
+    settings = existing;
   } else {
     const [updated] = await db
       .update(adminSettingsTable)
