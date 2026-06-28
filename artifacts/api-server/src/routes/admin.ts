@@ -9,6 +9,7 @@ import { invalidateMetaApiTokenCache, checkAndMarkProviderRole, ensureSlaveSubsc
 import { syncCopyFactoryStrategies, getLastSyncReport, repairStrategyCopyFactoryIds } from "../lib/copyfactorySync";
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
+import { getAllWorkers, getWorkerSummary, manualRestartWorker } from "../lib/workerRegistry";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
 import { serializeAccount as serializeSlaveAccount } from "./slaveAccounts";
 import { decryptCredential } from "../lib/auth";
@@ -967,6 +968,24 @@ router.get("/admin/copyfactory-audit", authenticate, requireAdmin, async (_req, 
     checks,
     failures: failedChecks,
   });
+});
+
+// Admin: get all worker statuses
+router.get("/admin/workers", authenticate, requireAdmin, (_req, res): void => {
+  const workers = getAllWorkers();
+  const summary = getWorkerSummary();
+  res.json({ workers, summary });
+});
+
+// Admin: manually restart (trigger immediate run of) a worker
+router.post("/admin/workers/:id/restart", authenticate, requireAdmin, (req, res): void => {
+  const workerId = String(req.params["id"]);
+  const success = manualRestartWorker(workerId);
+  if (!success) {
+    res.status(404).json({ error: "Worker not found or has no restart function" });
+    return;
+  }
+  res.json({ success: true, workerId });
 });
 
 // Admin: update customer care settings

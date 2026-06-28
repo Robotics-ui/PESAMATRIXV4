@@ -63,6 +63,7 @@ const adminNavItems = [
   { href: "/admin/announcements", label: "Announcements", icon: Bell },
   { href: "/admin/sms", label: "Bulk SMS", icon: MessageSquare },
   { href: "/admin/faq", label: "FAQ Manager", icon: HelpCircle },
+  { href: "/admin/workers", label: "Worker Dashboard", icon: Activity },
 ];
 
 export function Sidebar() {

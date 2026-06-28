@@ -1,5 +1,11 @@
 import cron from "node-cron";
 import { eq, inArray, and, or } from "drizzle-orm";
+import {
+  registerWorker,
+  workerTickStart,
+  workerTickComplete,
+  workerTickFailed,
+} from "./workerRegistry";
 import { syncCopyFactoryStrategies } from "./copyfactorySync";
 import {
   db,
@@ -94,6 +100,8 @@ export async function runEnforcementTick(): Promise<void> {
 
   const startedAt = new Date();
   status.isRunning = true;
+  workerTickStart("subscription-scheduler");
+  let enforcementFailed = false;
 
   const log: SchedulerRunLog = {
     runAt: startedAt.toISOString(),
@@ -366,7 +374,9 @@ export async function runEnforcementTick(): Promise<void> {
     const msg = `Fatal error in enforcement worker: ${String(fatalErr)}`;
     log.errors.push(msg);
     log.totalFailures++;
+    enforcementFailed = true;
     logger.error({ err: fatalErr }, msg);
+    workerTickFailed("subscription-scheduler", msg, log.runAt);
   } finally {
     log.durationMs = Date.now() - startedAt.getTime();
     status.isRunning = false;
@@ -389,12 +399,22 @@ export async function runEnforcementTick(): Promise<void> {
       },
       "Subscription enforcement worker finished",
     );
+    if (!enforcementFailed) {
+      workerTickComplete("subscription-scheduler", {
+        startedAt: log.runAt,
+        jobsProcessed: log.totalChecked,
+        errors: log.errors,
+      });
+    }
   }
 }
 
 // ─── Multi-step expiry warning tick ──────────────────────────────────────────
 
 export async function runExpiryWarningTick(): Promise<void> {
+  const expiryStartedAt = new Date().toISOString();
+  workerTickStart("expiry-warning");
+  try {
   const [settings] = await db
     .select()
     .from(adminSettingsTable)
@@ -540,11 +560,42 @@ export async function runExpiryWarningTick(): Promise<void> {
     { warned, skipped, warningDays },
     "Expiry warning tick complete",
   );
+  workerTickComplete("expiry-warning", { startedAt: expiryStartedAt, jobsProcessed: warned, errors: [] });
+  } catch (expiryErr) {
+    const expiryMsg = expiryErr instanceof Error ? expiryErr.message : String(expiryErr);
+    logger.error({ err: expiryErr }, "Expiry warning tick failed");
+    workerTickFailed("expiry-warning", expiryMsg, expiryStartedAt);
+  }
 }
 
 // ─── Scheduler bootstrap ────────────────────────────────────────────────────
 
 export function startScheduler(): void {
+  registerWorker({
+    id: "subscription-scheduler",
+    name: "Subscription Enforcement",
+    description: "Expires/renews subscriptions and suspends/reactivates CopyFactory bindings — runs every 5 minutes",
+    intervalMs: 5 * 60_000,
+    staleThresholdMs: 15 * 60_000,
+    restartFn: () => { void runEnforcementTick(); },
+  });
+  registerWorker({
+    id: "expiry-warning",
+    name: "Expiry Warning Notifier",
+    description: "Sends SMS/notification warnings for subscriptions expiring soon — runs every 5 minutes",
+    intervalMs: 5 * 60_000,
+    staleThresholdMs: 15 * 60_000,
+    restartFn: () => { void runExpiryWarningTick(); },
+  });
+  registerWorker({
+    id: "strategy-sync",
+    name: "CopyFactory Strategy Sync",
+    description: "Syncs strategies between the local DB and CopyFactory API — runs every 10 minutes",
+    intervalMs: 10 * 60_000,
+    staleThresholdMs: 30 * 60_000,
+    restartFn: () => { void syncCopyFactoryStrategies().catch((err) => { logger.error({ err }, "Strategy sync restart failed"); }); },
+  });
+
   cron.schedule("*/5 * * * *", () => {
     void runEnforcementTick();
     void runExpiryWarningTick();
@@ -553,9 +604,17 @@ export function startScheduler(): void {
   // Sync CopyFactory strategies every 10 minutes so name changes / deletions
   // made directly in CopyFactory are reflected in PesaMatrix automatically.
   cron.schedule("*/10 * * * *", () => {
-    void syncCopyFactoryStrategies().catch((err) => {
-      logger.error({ err }, "Scheduled CopyFactory strategy sync failed");
-    });
+    const syncStartedAt = new Date().toISOString();
+    workerTickStart("strategy-sync");
+    void syncCopyFactoryStrategies()
+      .then(() => {
+        workerTickComplete("strategy-sync", { startedAt: syncStartedAt, jobsProcessed: 1, errors: [] });
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ err }, "Scheduled CopyFactory strategy sync failed");
+        workerTickFailed("strategy-sync", msg, syncStartedAt);
+      });
   });
 
   logger.info(

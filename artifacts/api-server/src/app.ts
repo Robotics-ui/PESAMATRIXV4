@@ -13,6 +13,7 @@ import { startReconnectWorker } from "./lib/reconnectWorker";
 import { seedDefaultAccounts, seedReferralSettings } from "./lib/seed";
 import { startSmsWorker } from "./lib/smsWorker";
 import { seedDefaultTemplates, seedSmsSettings } from "./lib/smsService";
+import { startWorkerWatchdog } from "./lib/workerRegistry";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -134,6 +135,8 @@ startAccountPoller();
 startReconnectWorker();
 // Start SMS queue worker (every minute)
 startSmsWorker();
+// Start worker watchdog — monitors all workers, auto-restarts failed ones every 30s
+startWorkerWatchdog();
 // Seed SMS settings from env vars (auto-enables if MSPACE_API_KEY + MSPACE_USERNAME are set)
 void seedSmsSettings();
 // Seed default SMS templates

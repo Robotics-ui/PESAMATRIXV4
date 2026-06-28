@@ -3,6 +3,12 @@ import { db, masterAccountsTable, slaveAccountsTable, strategiesTable, masterAcc
 import { getMetaApiToken, callMetaApi, mapMetaApiState, checkAndMarkProviderRole, ensureSlaveSubscriberRole } from "./metaapi";
 import { autoBindSlaveAccount } from "./autoBinding";
 import { logger } from "./logger";
+import {
+  registerWorker,
+  workerTickStart,
+  workerTickComplete,
+  workerTickFailed,
+} from "./workerRegistry";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
 const POLL_INTERVAL_MS = 30_000;
@@ -323,6 +329,9 @@ async function runPollerTick(): Promise<void> {
   }
   pollerRunning = true;
   const startedAt = Date.now();
+  const pollerStartedAt = new Date().toISOString();
+  workerTickStart("account-poller");
+  let pollerFailed = false;
   try {
     const token = await getMetaApiToken();
     if (!token) return;
@@ -454,8 +463,13 @@ async function runPollerTick(): Promise<void> {
       "Account poller tick finished"
     );
   } catch (err) {
+    pollerFailed = true;
+    workerTickFailed("account-poller", err instanceof Error ? err.message : String(err), pollerStartedAt);
     logger.error({ err }, "Account poller tick failed");
   } finally {
+    if (!pollerFailed) {
+      workerTickComplete("account-poller", { startedAt: pollerStartedAt, jobsProcessed: pollCount, errors: [] });
+    }
     pollerRunning = false;
   }
 }
@@ -469,6 +483,9 @@ async function runMonitorTick(): Promise<void> {
   }
   monitorRunning = true;
   const startedAt = Date.now();
+  const monitorStartedAt = new Date().toISOString();
+  workerTickStart("health-monitor");
+  let monitorFailed = false;
   try {
     const token = await getMetaApiToken();
     if (!token) return;
@@ -520,8 +537,13 @@ async function runMonitorTick(): Promise<void> {
       "Health monitor tick finished"
     );
   } catch (err) {
+    monitorFailed = true;
+    workerTickFailed("health-monitor", err instanceof Error ? err.message : String(err), monitorStartedAt);
     logger.error({ err }, "Health monitor tick failed");
   } finally {
+    if (!monitorFailed) {
+      workerTickComplete("health-monitor", { startedAt: monitorStartedAt, jobsProcessed: monitorCount, errors: [] });
+    }
     monitorRunning = false;
   }
 }
@@ -529,6 +551,23 @@ async function runMonitorTick(): Promise<void> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function startAccountPoller(): void {
+  registerWorker({
+    id: "account-poller",
+    name: "MetaApi Account Poller",
+    description: "Advances account lifecycle states (deploying → connecting → active) — runs every 30 seconds",
+    intervalMs: POLL_INTERVAL_MS,
+    staleThresholdMs: 3 * 60_000,
+    restartFn: () => { void runPollerNow(); },
+  });
+  registerWorker({
+    id: "health-monitor",
+    name: "MetaApi Health Monitor",
+    description: "Monitors active/suspended master accounts for connection loss — runs every 5 minutes",
+    intervalMs: MONITOR_INTERVAL_MS,
+    staleThresholdMs: 20 * 60_000,
+    restartFn: () => { void runMonitorTick(); },
+  });
+
   setInterval(() => { void runPollerTick(); }, POLL_INTERVAL_MS);
   setInterval(() => { void runMonitorTick(); }, MONITOR_INTERVAL_MS);
   logger.info(
