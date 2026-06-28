@@ -48,7 +48,7 @@ import { cn } from "@/lib/utils";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { getGetAdminSettingsQueryKey } from "@workspace/api-client-react";
 
 const ALL_PAIRS_LIST = ["EUR/USD","GBP/USD","USD/JPY","USD/CHF","AUD/USD","NZD/USD","USD/CAD","EUR/GBP","EUR/JPY","GBP/JPY"];
@@ -166,6 +166,216 @@ function timeAgo(iso: string | null | undefined): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── CopyFactory Pipeline Audit Card ──────────────────────────────────────────
+
+interface CfCheckResult { pass: boolean; detail: string; }
+interface CfAuditResponse {
+  generatedAt: string;
+  result: "PASS" | "FAIL";
+  passCount: number;
+  failCount: number;
+  totalChecks: number;
+  checks: Record<string, CfCheckResult>;
+  failures: { check: string; detail: string }[];
+}
+
+const CF_CHECK_LABELS: Record<string, string> = {
+  masterConnected:         "Master Connected",
+  providerRegistered:      "Provider Registered",
+  strategyRegistered:      "Strategy Registered",
+  activeStrategySet:       "Active Strategy Set",
+  activeStrategyCfIdPresent: "Active CF Strategy ID",
+  slaveDeployed:           "Slave Deployed",
+  subscribersRegistered:   "Subscribers Registered",
+  bindingsPresent:         "Bindings Present",
+  bindingsSynced:          "Bindings Synced",
+  schedulerRunning:        "Scheduler Running",
+};
+
+// Ordered pipeline stages (left to right)
+const CF_CHECK_ORDER = [
+  "masterConnected",
+  "providerRegistered",
+  "strategyRegistered",
+  "activeStrategySet",
+  "activeStrategyCfIdPresent",
+  "slaveDeployed",
+  "subscribersRegistered",
+  "bindingsPresent",
+  "bindingsSynced",
+  "schedulerRunning",
+];
+
+function cfFetch<T>(path: string): Promise<T> {
+  const tok = localStorage.getItem("token") ?? "";
+  return fetch(path, { headers: { Authorization: `Bearer ${tok}` } })
+    .then((r) => {
+      if (!r.ok) throw new Error(r.statusText);
+      return r.json() as Promise<T>;
+    });
+}
+
+function CfPipelineAuditCard() {
+  const qc = useQueryClient();
+  const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
+
+  const { data, isLoading, isError, dataUpdatedAt } = useQuery<CfAuditResponse>({
+    queryKey: ["cf-audit"],
+    queryFn: () => cfFetch<CfAuditResponse>("/api/admin/copyfactory-audit"),
+    refetchInterval: 30_000,
+  });
+
+  const isPass = data?.result === "PASS";
+  const genAt = dataUpdatedAt > 0 ? new Date(dataUpdatedAt) : null;
+
+  return (
+    <Card className={cn(
+      "border-border",
+      data && !isLoading && (isPass
+        ? "border-green-600/30"
+        : "border-red-500/30")
+    )}>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <Radio className="h-4 w-4 text-blue-400 shrink-0" />
+            <CardTitle className="text-sm font-semibold">CopyFactory Pipeline</CardTitle>
+            {isLoading && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground animate-spin" />}
+            {!isLoading && data && (
+              <Badge className={cn(
+                "text-xs font-bold px-2 py-0 h-5",
+                isPass
+                  ? "bg-green-600/15 text-green-400 border-green-600/30"
+                  : "bg-red-500/15 text-red-400 border-red-500/30"
+              )}>
+                {isPass ? "PASS" : "FAIL"}
+              </Badge>
+            )}
+            {!isLoading && data && (
+              <span className="text-xs text-muted-foreground">
+                {data.passCount}/{data.totalChecks} checks passed
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {genAt && (
+              <span className="text-xs text-muted-foreground hidden sm:block">
+                {timeAgo(genAt.toISOString())}
+              </span>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => void qc.invalidateQueries({ queryKey: ["cf-audit"] })}
+              disabled={isLoading}
+              title="Refresh audit"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-0">
+        {isError && (
+          <p className="text-xs text-red-400 flex items-center gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            Failed to load audit — API may be unavailable.
+          </p>
+        )}
+
+        {isLoading && !data && (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            {CF_CHECK_ORDER.map((k) => (
+              <div key={k} className="h-10 rounded bg-muted/40 animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {data && (
+          <>
+            {/* Pipeline flow — 5 per row on wider screens */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              {CF_CHECK_ORDER.map((key, idx) => {
+                const check = data.checks[key];
+                if (!check) return null;
+                const label = CF_CHECK_LABELS[key] ?? key;
+                const isExpanded = expandedCheck === key;
+                // Find the step index in the pipeline (for ordering)
+                const step = idx + 1;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setExpandedCheck(isExpanded ? null : key)}
+                    className={cn(
+                      "text-left rounded-lg border px-2.5 py-2 transition-colors group",
+                      check.pass
+                        ? "bg-green-600/5 border-green-600/20 hover:bg-green-600/10"
+                        : "bg-red-500/5 border-red-500/20 hover:bg-red-500/10"
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn(
+                        "text-[10px] font-bold rounded px-1 leading-tight shrink-0",
+                        check.pass ? "text-green-400/70" : "text-red-400/70"
+                      )}>
+                        {step}
+                      </span>
+                      {check.pass
+                        ? <CheckCircle2 className="h-3 w-3 text-green-400 shrink-0" />
+                        : <XCircle className="h-3 w-3 text-red-400 shrink-0" />
+                      }
+                    </div>
+                    <p className={cn(
+                      "text-[11px] font-medium leading-tight mt-1",
+                      check.pass ? "text-foreground" : "text-red-300"
+                    )}>
+                      {label}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Expanded detail panel */}
+            {expandedCheck && data.checks[expandedCheck] && (
+              <div className={cn(
+                "mt-2 rounded-lg border px-3 py-2 text-xs",
+                data.checks[expandedCheck]!.pass
+                  ? "bg-green-600/5 border-green-600/20 text-green-200"
+                  : "bg-red-500/5 border-red-500/20 text-red-200"
+              )}>
+                <p className="font-semibold mb-0.5">
+                  {CF_CHECK_LABELS[expandedCheck] ?? expandedCheck}
+                </p>
+                <p className="text-muted-foreground leading-snug">
+                  {data.checks[expandedCheck]!.detail}
+                </p>
+              </div>
+            )}
+
+            {/* Failure summary */}
+            {data.failures.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {data.failures.map((f) => (
+                  <div
+                    key={f.check}
+                    className="flex items-start gap-2 text-xs bg-red-500/5 border border-red-500/15 rounded px-2.5 py-1.5"
+                  >
+                    <AlertCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-px" />
+                    <span className="text-red-300 leading-snug">{f.detail}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function CustomerCareSettingsTab() {
@@ -2281,6 +2491,8 @@ export default function AdminPage() {
             </Card>
           ))}
         </div>
+
+        <CfPipelineAuditCard />
 
         <Tabs defaultValue="approvals" className="space-y-4">
           <TabsList className="bg-muted/50">
