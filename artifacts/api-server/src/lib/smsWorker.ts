@@ -1,4 +1,6 @@
 import cron, { type ScheduledTask } from "node-cron";
+import { eq } from "drizzle-orm";
+import { db, smsQueueTable } from "@workspace/db";
 import { processSmsQueue } from "./smsService";
 import { logger } from "./logger";
 import {
@@ -7,6 +9,21 @@ import {
   workerTickComplete,
   workerTickFailed,
 } from "./workerRegistry";
+import { RetryQueue } from "./retryQueue";
+
+// ── Manual SMS retry queue — admin-triggered retries of DB-failed SMS items ────
+export const smsManualRetryQueue = new RetryQueue<{ smsId: number }>(
+  "sms-manual-retry",
+  async ({ smsId }) => {
+    await db
+      .update(smsQueueTable)
+      .set({ status: "pending", attempts: 0 })
+      .where(eq(smsQueueTable.id, smsId));
+    await processSmsQueue(1, 3);
+    logger.info({ smsId }, "smsManualRetryQueue: SMS item reset and re-processed");
+  },
+  { baseDelayMs: 2_000 }
+);
 
 const INTERVAL_MS = 60_000;
 const STALE_THRESHOLD_MS = 5 * 60_000;

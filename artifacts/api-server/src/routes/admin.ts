@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { eq, sum, count, desc, isNotNull } from "drizzle-orm";
+import { eq, sum, count, asc, desc, isNotNull, sql } from "drizzle-orm";
 import crypto from "crypto";
-import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, passwordResetTokensTable, referralsTable, promoCodesTable, customerCareSettingsTable } from "@workspace/db";
+import { db, usersTable, subscriptionsTable, paymentsTable, slaveAccountsTable, strategiesTable, adminSettingsTable, bindingsTable, masterAccountsTable, masterAccountAuditLogsTable, passwordResetTokensTable, referralsTable, promoCodesTable, customerCareSettingsTable, smsQueueTable } from "@workspace/db";
 import { SuspendUserParams, ActivateUserParams, UpdateAdminSettingsBody } from "@workspace/api-zod";
 import { authenticate, requireAdmin } from "../middlewares/authenticate";
 import { notifyAccountSuspended, notifyMasterAccountApproved } from "../lib/smsNotifier";
@@ -10,6 +10,7 @@ import { syncCopyFactoryStrategies, getLastSyncReport, repairStrategyCopyFactory
 import { getSchedulerStatus, runEnforcementTick, runExpiryWarningTick } from "../lib/scheduler";
 import { runPollerNow, writeAuditLog } from "../lib/accountPoller";
 import { getAllWorkers, getWorkerSummary, manualRestartWorker } from "../lib/workerRegistry";
+import { getRegisteredQueues, clearQueueByName, retryHistoryJob, retryAllFailed } from "../lib/retryQueue";
 import { deployMasterToMetaApi, serializeAccount } from "./masterAccounts";
 import { serializeAccount as serializeSlaveAccount } from "./slaveAccounts";
 import { decryptCredential } from "../lib/auth";
@@ -1030,6 +1031,180 @@ router.put("/admin/customer-care", authenticate, requireAdmin, async (req, res):
       .returning();
     res.json(created);
   }
+});
+
+// ── Master Account Audit Trail ────────────────────────────────────────────────
+
+// GET /admin/master-audit — all masters with user email + audit event count
+router.get("/admin/master-audit", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const masters = await db
+    .select({
+      id: masterAccountsTable.id,
+      mt5Login: masterAccountsTable.mt5Login,
+      broker: masterAccountsTable.broker,
+      status: masterAccountsTable.status,
+      platform: masterAccountsTable.platform,
+      userId: masterAccountsTable.userId,
+      createdAt: masterAccountsTable.createdAt,
+      userEmail: usersTable.email,
+    })
+    .from(masterAccountsTable)
+    .leftJoin(usersTable, eq(masterAccountsTable.userId, usersTable.id))
+    .orderBy(desc(masterAccountsTable.id));
+
+  const auditCounts = await db
+    .select({
+      masterAccountId: masterAccountAuditLogsTable.masterAccountId,
+      eventCount: sql<number>`count(*)::int`,
+    })
+    .from(masterAccountAuditLogsTable)
+    .groupBy(masterAccountAuditLogsTable.masterAccountId);
+
+  const countMap = new Map<number, number>(auditCounts.map((r) => [r.masterAccountId, r.eventCount]));
+
+  res.json(masters.map((m) => ({ ...m, auditEventCount: countMap.get(m.id) ?? 0 })));
+});
+
+// GET /admin/master-audit/:masterAccountId — full audit timeline for one master
+router.get("/admin/master-audit/:masterAccountId", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const masterAccountId = parseInt(String(req.params.masterAccountId), 10);
+  if (isNaN(masterAccountId)) { res.status(400).json({ error: "Invalid masterAccountId" }); return; }
+
+  const [master] = await db
+    .select({
+      id: masterAccountsTable.id,
+      mt5Login: masterAccountsTable.mt5Login,
+      broker: masterAccountsTable.broker,
+      status: masterAccountsTable.status,
+      platform: masterAccountsTable.platform,
+      createdAt: masterAccountsTable.createdAt,
+      userEmail: usersTable.email,
+    })
+    .from(masterAccountsTable)
+    .leftJoin(usersTable, eq(masterAccountsTable.userId, usersTable.id))
+    .where(eq(masterAccountsTable.id, masterAccountId))
+    .limit(1);
+
+  if (!master) { res.status(404).json({ error: "Master account not found" }); return; }
+
+  const logs = await db
+    .select()
+    .from(masterAccountAuditLogsTable)
+    .where(eq(masterAccountAuditLogsTable.masterAccountId, masterAccountId))
+    .orderBy(asc(masterAccountAuditLogsTable.createdAt));
+
+  const adminIds = [...new Set(logs.map((l) => l.adminId).filter((id): id is number => id !== null))];
+  let adminMap = new Map<number, string>();
+  if (adminIds.length > 0) {
+    const admins = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable).where(eq(usersTable.id, adminIds[0]));
+    adminMap = new Map(admins.map((a) => [a.id, a.email]));
+  }
+
+  res.json({
+    master,
+    logs: logs.map((l) => ({
+      ...l,
+      adminEmail: l.adminId ? (adminMap.get(l.adminId) ?? null) : null,
+    })),
+  });
+});
+
+// ── Retry Queue Inspector ─────────────────────────────────────────────────────
+
+// GET /admin/queues — all registered in-memory retry queues
+router.get("/admin/queues", authenticate, requireAdmin, async (_req, res): Promise<void> => {
+  const queues = getRegisteredQueues();
+
+  // Also fetch the SMS database queue summary
+  const smsStats = await db
+    .select({
+      status: smsQueueTable.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(smsQueueTable)
+    .groupBy(smsQueueTable.status);
+
+  const smsMap = Object.fromEntries(smsStats.map((r) => [r.status, r.count]));
+
+  const failedSms = await db
+    .select({
+      id: smsQueueTable.id,
+      phone: smsQueueTable.phone,
+      eventType: smsQueueTable.eventType,
+      attempts: smsQueueTable.attempts,
+      lastAttemptAt: smsQueueTable.lastAttemptAt,
+      createdAt: smsQueueTable.createdAt,
+    })
+    .from(smsQueueTable)
+    .where(eq(smsQueueTable.status, "failed"))
+    .orderBy(desc(smsQueueTable.createdAt))
+    .limit(30);
+
+  const pendingSms = await db
+    .select({
+      id: smsQueueTable.id,
+      phone: smsQueueTable.phone,
+      eventType: smsQueueTable.eventType,
+      attempts: smsQueueTable.attempts,
+      scheduledFor: smsQueueTable.scheduledFor,
+      createdAt: smsQueueTable.createdAt,
+    })
+    .from(smsQueueTable)
+    .where(eq(smsQueueTable.status, "pending"))
+    .orderBy(asc(smsQueueTable.scheduledFor))
+    .limit(30);
+
+  res.json({
+    queues,
+    smsDbQueue: {
+      stats: {
+        pending: smsMap["pending"] ?? 0,
+        sending: smsMap["sending"] ?? 0,
+        sent: smsMap["sent"] ?? 0,
+        failed: smsMap["failed"] ?? 0,
+      },
+      pending: pendingSms,
+      failed: failedSms,
+    },
+  });
+});
+
+// POST /admin/queues/:name/clear — clear pending jobs from a named in-memory queue
+router.post("/admin/queues/:name/clear", authenticate, requireAdmin, (req, res): void => {
+  const name = String(req.params.name);
+  const ok = clearQueueByName(name);
+  if (!ok) { res.status(404).json({ error: `Queue "${name}" not found` }); return; }
+  res.json({ success: true });
+});
+
+// POST /admin/queues/:name/jobs/:jobId/retry — re-trigger a specific failed job
+router.post("/admin/queues/:name/jobs/:jobId/retry", authenticate, requireAdmin, (req, res): void => {
+  const name = String(req.params.name);
+  const jobId = String(req.params.jobId);
+  const ok = retryHistoryJob(name, jobId);
+  if (!ok) { res.status(404).json({ error: `Job "${jobId}" not found in queue "${name}"` }); return; }
+  res.json({ success: true });
+});
+
+// POST /admin/queues/:name/retry-failed — re-trigger all failed jobs in a queue
+router.post("/admin/queues/:name/retry-failed", authenticate, requireAdmin, (req, res): void => {
+  const name = String(req.params.name);
+  const n = retryAllFailed(name);
+  res.json({ success: true, count: n });
+});
+
+// POST /admin/sms-queue/:id/retry — manually retry a specific failed SMS from the database
+router.post("/admin/sms-queue/:id/retry", authenticate, requireAdmin, async (req, res): Promise<void> => {
+  const smsId = parseInt(String(req.params.id), 10);
+  if (isNaN(smsId)) { res.status(400).json({ error: "Invalid SMS id" }); return; }
+
+  const [sms] = await db.select({ id: smsQueueTable.id, status: smsQueueTable.status }).from(smsQueueTable).where(eq(smsQueueTable.id, smsId)).limit(1);
+  if (!sms) { res.status(404).json({ error: "SMS not found" }); return; }
+
+  // Lazy-import to avoid circular dep at module load time
+  const { smsManualRetryQueue } = await import("../lib/smsWorker");
+  smsManualRetryQueue.enqueue(`sms-${smsId}:${Date.now()}`, `SMS ${smsId} manual retry`, { smsId }, 3);
+  res.json({ success: true });
 });
 
 export default router;

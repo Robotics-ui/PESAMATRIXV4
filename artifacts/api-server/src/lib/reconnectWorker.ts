@@ -1,4 +1,4 @@
-import { inArray, isNotNull, and, or, isNull, lt, eq } from "drizzle-orm";
+import { inArray, isNotNull, and, eq } from "drizzle-orm";
 import { db, masterAccountsTable, slaveAccountsTable } from "@workspace/db";
 import { getMetaApiToken, callMetaApi } from "./metaapi";
 import { logger } from "./logger";
@@ -8,48 +8,55 @@ import {
   workerTickComplete,
   workerTickFailed,
 } from "./workerRegistry";
+import { RetryQueue } from "./retryQueue";
 
 const PROVISIONING_API = "https://mt-provisioning-api-v1.agiliumtrade.agiliumtrade.ai";
 const RECONNECT_INTERVAL_MS = 5 * 60 * 1000;
 const STALE_THRESHOLD_MS = 20 * 60 * 1000;
-const STALE_ACCOUNT_THRESHOLD_MS = 10 * 60 * 1000;
 
-async function attemptRedeploy(
-  metaapiAccountId: string,
-  token: string,
-  label: string,
-  updateStatus: (status: string, errMsg: string | null) => Promise<void>
-): Promise<void> {
-  try {
+// ── Per-account retry queue ────────────────────────────────────────────────────
+
+interface ReconnectJob {
+  accountId: number;
+  accountType: "master" | "slave";
+  metaapiAccountId: string;
+  label: string;
+}
+
+export const reconnectRetryQueue = new RetryQueue<ReconnectJob>(
+  "reconnect-retry",
+  async (job) => {
+    const token = await getMetaApiToken();
+    if (!token) throw new Error("MetaApi token unavailable");
+
     const result = await callMetaApi(
       "POST",
-      `${PROVISIONING_API}/users/current/accounts/${metaapiAccountId}/deploy`,
+      `${PROVISIONING_API}/users/current/accounts/${job.metaapiAccountId}/deploy`,
       token
     );
+
     if (result.ok || result.status === 204) {
-      logger.info({ metaapiAccountId, label }, "Reconnect worker: deploy retried");
-      await updateStatus("deploying", null);
+      logger.info({ ...job }, "reconnectRetryQueue: deploy retried successfully");
+      if (job.accountType === "master") {
+        await db.update(masterAccountsTable).set({ status: "deploying", lastErrorMessage: null }).where(eq(masterAccountsTable.id, job.accountId));
+      } else {
+        await db.update(slaveAccountsTable).set({ status: "deploying", lastErrorMessage: null }).where(eq(slaveAccountsTable.id, job.accountId));
+      }
     } else {
       const body = result.data as { message?: string } | null;
-      const errMsg = body?.message ?? `Deploy HTTP ${result.status}`;
-      logger.warn(
-        { metaapiAccountId, label, httpStatus: result.status, body: result.data },
-        "Reconnect worker: deploy retry returned non-OK"
-      );
-      await updateStatus("failed", `Retry failed: ${errMsg}`);
+      throw new Error(body?.message ?? `Deploy returned HTTP ${result.status}`);
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ metaapiAccountId, label, err }, "Reconnect worker: deploy retry error");
-    await updateStatus("failed", `Retry error: ${msg}`);
-  }
-}
+  },
+  { baseDelayMs: 5_000 }
+);
+
+// ── 5-minute reconnect tick ───────────────────────────────────────────────────
 
 async function runReconnectTick(): Promise<void> {
   const startedAt = new Date().toISOString();
   workerTickStart("reconnect-worker");
-  const errors: string[] = [];
-  let actioned = 0;
+  let failed = false;
+  let enqueued = 0;
 
   try {
     const token = await getMetaApiToken();
@@ -58,165 +65,55 @@ async function runReconnectTick(): Promise<void> {
       return;
     }
 
-    const staleThreshold = new Date(Date.now() - STALE_ACCOUNT_THRESHOLD_MS);
-
     const disconnectedMasters = await db
-      .select()
+      .select({ id: masterAccountsTable.id, metaapiAccountId: masterAccountsTable.metaapiAccountId, mt5Login: masterAccountsTable.mt5Login })
       .from(masterAccountsTable)
-      .where(
-        and(
-          inArray(masterAccountsTable.status, ["disconnected"]),
-          isNotNull(masterAccountsTable.metaapiAccountId),
-          or(
-            isNull(masterAccountsTable.lastCheckedAt),
-            lt(masterAccountsTable.lastCheckedAt, staleThreshold)
-          )
-        )
-      );
+      .where(and(
+        inArray(masterAccountsTable.status, ["disconnected", "failed"]),
+        isNotNull(masterAccountsTable.metaapiAccountId)
+      ));
 
     const disconnectedSlaves = await db
-      .select()
+      .select({ id: slaveAccountsTable.id, metaapiAccountId: slaveAccountsTable.metaapiAccountId, mt5Login: slaveAccountsTable.mt5Login })
       .from(slaveAccountsTable)
-      .where(
-        and(
-          inArray(slaveAccountsTable.status, ["disconnected"]),
-          isNotNull(slaveAccountsTable.metaapiAccountId),
-          or(
-            isNull(slaveAccountsTable.lastCheckedAt),
-            lt(slaveAccountsTable.lastCheckedAt, staleThreshold)
-          )
-        )
-      );
-
-    const failedMasters = await db
-      .select()
-      .from(masterAccountsTable)
-      .where(
-        and(
-          inArray(masterAccountsTable.status, ["failed"]),
-          isNotNull(masterAccountsTable.metaapiAccountId)
-        )
-      );
-
-    const failedSlaves = await db
-      .select()
-      .from(slaveAccountsTable)
-      .where(
-        and(
-          inArray(slaveAccountsTable.status, ["failed"]),
-          isNotNull(slaveAccountsTable.metaapiAccountId)
-        )
-      );
+      .where(and(
+        inArray(slaveAccountsTable.status, ["disconnected", "failed"]),
+        isNotNull(slaveAccountsTable.metaapiAccountId)
+      ));
 
     for (const acc of disconnectedMasters) {
-      logger.info(
-        { id: acc.id, metaapiAccountId: acc.metaapiAccountId },
-        "Reconnect worker: retrying disconnected master"
+      reconnectRetryQueue.enqueue(
+        `master-${acc.id}`,
+        `Master ${acc.mt5Login ?? acc.id} reconnect`,
+        { accountId: acc.id, accountType: "master", metaapiAccountId: acc.metaapiAccountId!, label: `master-${acc.id}` },
+        3
       );
-      try {
-        await attemptRedeploy(acc.metaapiAccountId!, token, `master-${acc.id}`, async (s, e) => {
-          await db
-            .update(masterAccountsTable)
-            .set({ status: s, lastErrorMessage: e })
-            .where(eq(masterAccountsTable.id, acc.id));
-        });
-        actioned++;
-      } catch (err) {
-        errors.push(`master-${acc.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      enqueued++;
     }
 
     for (const acc of disconnectedSlaves) {
-      logger.info(
-        { id: acc.id, metaapiAccountId: acc.metaapiAccountId },
-        "Reconnect worker: retrying disconnected slave"
+      reconnectRetryQueue.enqueue(
+        `slave-${acc.id}`,
+        `Slave ${acc.mt5Login ?? acc.id} reconnect`,
+        { accountId: acc.id, accountType: "slave", metaapiAccountId: acc.metaapiAccountId!, label: `slave-${acc.id}` },
+        3
       );
-      try {
-        await attemptRedeploy(acc.metaapiAccountId!, token, `slave-${acc.id}`, async (s, e) => {
-          await db
-            .update(slaveAccountsTable)
-            .set({ status: s, lastErrorMessage: e })
-            .where(eq(slaveAccountsTable.id, acc.id));
-        });
-        actioned++;
-      } catch (err) {
-        errors.push(`slave-${acc.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+      enqueued++;
     }
 
-    for (const acc of failedMasters) {
-      logger.info(
-        { id: acc.id, metaapiAccountId: acc.metaapiAccountId },
-        "Reconnect worker: retrying FAILED master"
-      );
-      try {
-        await attemptRedeploy(
-          acc.metaapiAccountId!,
-          token,
-          `master-failed-${acc.id}`,
-          async (s, e) => {
-            await db
-              .update(masterAccountsTable)
-              .set({ status: s, lastErrorMessage: e })
-              .where(eq(masterAccountsTable.id, acc.id));
-          }
-        );
-        actioned++;
-      } catch (err) {
-        errors.push(`master-failed-${acc.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
+    if (enqueued > 0) {
+      logger.info({ enqueued, masters: disconnectedMasters.length, slaves: disconnectedSlaves.length }, "Reconnect worker: accounts queued for reconnect");
     }
 
-    for (const acc of failedSlaves) {
-      logger.info(
-        { id: acc.id, metaapiAccountId: acc.metaapiAccountId },
-        "Reconnect worker: retrying FAILED slave"
-      );
-      try {
-        await attemptRedeploy(
-          acc.metaapiAccountId!,
-          token,
-          `slave-failed-${acc.id}`,
-          async (s, e) => {
-            await db
-              .update(slaveAccountsTable)
-              .set({ status: s, lastErrorMessage: e })
-              .where(eq(slaveAccountsTable.id, acc.id));
-          }
-        );
-        actioned++;
-      } catch (err) {
-        errors.push(`slave-failed-${acc.id}: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-
-    const totalActioned =
-      disconnectedMasters.length +
-      disconnectedSlaves.length +
-      failedMasters.length +
-      failedSlaves.length;
-
-    if (totalActioned > 0) {
-      logger.info(
-        {
-          reconnectedDisconnected:
-            disconnectedMasters.length + disconnectedSlaves.length,
-          retriedFailed: failedMasters.length + failedSlaves.length,
-        },
-        "Reconnect worker tick completed"
-      );
-    }
-
-    workerTickComplete("reconnect-worker", {
-      startedAt,
-      jobsProcessed: actioned,
-      errors,
-    });
+    workerTickComplete("reconnect-worker", { startedAt, jobsProcessed: enqueued, errors: [] });
   } catch (err) {
+    failed = true;
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err }, "Reconnect worker tick failed");
     workerTickFailed("reconnect-worker", msg, startedAt);
   }
+
+  void failed;
 }
 
 export function runReconnectNow(): void {
@@ -228,18 +125,13 @@ export function startReconnectWorker(): void {
     id: "reconnect-worker",
     name: "MetaApi Reconnect Worker",
     description:
-      "Retries disconnected/failed MetaApi accounts by redeploying them — runs every 5 minutes",
+      "Queues disconnected/failed MetaApi accounts for reconnect with exponential backoff — runs every 5 minutes",
     intervalMs: RECONNECT_INTERVAL_MS,
     staleThresholdMs: STALE_THRESHOLD_MS,
     restartFn: runReconnectNow,
   });
 
-  setInterval(() => {
-    void runReconnectTick();
-  }, RECONNECT_INTERVAL_MS);
+  setInterval(() => { void runReconnectTick(); }, RECONNECT_INTERVAL_MS);
 
-  logger.info(
-    { intervalMs: RECONNECT_INTERVAL_MS },
-    "MetaApi reconnect worker started"
-  );
+  logger.info({ intervalMs: RECONNECT_INTERVAL_MS }, "MetaApi reconnect worker started");
 }

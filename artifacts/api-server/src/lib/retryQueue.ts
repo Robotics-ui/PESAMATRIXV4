@@ -23,9 +23,66 @@ export interface RetryQueueStats {
   totalProcessed: number;
 }
 
+export interface QueueSnapshot {
+  name: string;
+  stats: RetryQueueStats;
+  pending: QueueJob[];
+  recentHistory: QueueJob[];
+}
+
 type JobHandler<T> = (payload: T) => Promise<void>;
 
 const MAX_HISTORY = 100;
+
+// ── Global registry ───────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const queueRegistry = new Map<string, RetryQueue<any>>();
+
+export function getRegisteredQueues(): QueueSnapshot[] {
+  return Array.from(queueRegistry.entries()).map(([name, q]) => ({
+    name,
+    stats: q.getStats(),
+    pending: q.getQueue() as QueueJob[],
+    recentHistory: (q.getHistory() as QueueJob[]).slice(0, 50),
+  }));
+}
+
+export function clearQueueByName(name: string): boolean {
+  const q = queueRegistry.get(name);
+  if (!q) return false;
+  q.clear();
+  logger.info({ queue: name }, "RetryQueue cleared by admin");
+  return true;
+}
+
+export function retryHistoryJob(name: string, jobId: string): boolean {
+  const q = queueRegistry.get(name);
+  if (!q) return false;
+  const history = q.getHistory() as QueueJob[];
+  const job = history.find((j) => j.id === jobId);
+  if (!job) return false;
+  // Re-enqueue with a fresh ID to bypass deduplication
+  const newId = `${job.id}:retry:${Date.now()}`;
+  q.enqueue(newId, `${job.name} (retry)`, job.payload, job.maxAttempts);
+  logger.info({ queue: name, originalJobId: jobId, newJobId: newId }, "RetryQueue job manually re-triggered");
+  return true;
+}
+
+export function retryAllFailed(name: string): number {
+  const q = queueRegistry.get(name);
+  if (!q) return 0;
+  const history = q.getHistory() as QueueJob[];
+  const failed = history.filter((j) => j.status === "failed");
+  for (const job of failed) {
+    const newId = `${job.id}:retry:${Date.now()}`;
+    q.enqueue(newId, `${job.name} (retry)`, job.payload, job.maxAttempts);
+  }
+  logger.info({ queue: name, count: failed.length }, "RetryQueue: all failed jobs re-triggered by admin");
+  return failed.length;
+}
+
+// ── RetryQueue class ──────────────────────────────────────────────────────────
 
 export class RetryQueue<T = unknown> {
   private readonly queueName: string;
@@ -43,6 +100,8 @@ export class RetryQueue<T = unknown> {
     this.queueName = queueName;
     this.handler = handler;
     this.baseDelayMs = options?.baseDelayMs ?? 1000;
+    // Auto-register in global registry
+    queueRegistry.set(queueName, this);
   }
 
   enqueue(id: string, name: string, payload: T, maxAttempts = 3): void {
@@ -100,13 +159,11 @@ export class RetryQueue<T = unknown> {
         job.status = "pending";
         const delay = this.baseDelayMs * Math.pow(2, job.attempts - 1);
         logger.warn(
-          { queue: this.queueName, jobId: job.id, name: job.name, attempt: job.attempts, nextDelayMs: delay, error: job.lastError },
+          { queue: this.queueName, jobId: job.id, attempt: job.attempts, nextDelayMs: delay, error: job.lastError },
           "RetryQueue: job failed, scheduling retry"
         );
         this.processing = false;
-        setTimeout(() => {
-          void this.processNext();
-        }, delay);
+        setTimeout(() => { void this.processNext(); }, delay);
         return;
       }
     } finally {
@@ -118,13 +175,8 @@ export class RetryQueue<T = unknown> {
     }
   }
 
-  getQueue(): QueueJob<T>[] {
-    return [...this.queue];
-  }
-
-  getHistory(): QueueJob<T>[] {
-    return [...this.history];
-  }
+  getQueue(): QueueJob<T>[] { return [...this.queue]; }
+  getHistory(): QueueJob<T>[] { return [...this.history]; }
 
   getStats(): RetryQueueStats {
     return {
